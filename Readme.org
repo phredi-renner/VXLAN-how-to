@@ -27,7 +27,9 @@ _*Super-Spine*_: A layer 3 switch that is unaware of VXLAN overlay networks. Thi
 _*Leaf*_: A layer 3 switch that participates in the underlay and overlay networks. This is where VTEPs exist. This can function as an access layer switch providing end-point connectivity as well as a L2 distribution switch aggregating L2 connectivity to downstream access switches.
 
 * Here's the layout
+
 ![vxlan lab diagram](readme_content/diagram.png)
+
 * Configuration - Underlay
 The underlay provides basic connectivity and routing between the physical network devices and requires IP addressing and routing to provide this. As outlined in the diagram there are layer 3 point to point links between the leafs and spines. In some cases we may have a leaf pair in one location with a link between them, this will be a layer 2 trunk.
 ** Configure Point-to-point link addresses
