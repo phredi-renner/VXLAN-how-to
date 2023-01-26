@@ -1,0 +1,476 @@
+#+title:Building VXLAN: An Outline of the Steps and their purpose
+
+* Introduction
+Traditional data centers an campus networks have used layer 2 links to span racks, rooms floors and buildings. This would create large L2 domains that are not ideal due to unnecessarily large broadcast domains, slow convergence and reliance on spanning tree. The flexibility of these large L2 domains is also it's challenge, VXLAN reduces the size of the L2 domain yet provides the flexibility of stretching L2 from rack to rack, row data center or building location.
+
+* Overview
+VXLAN tunnels a L2 frame or L3 packet and routes it to another VXLAN Tunnel Endpoint (VTEP), functionally extending one L2 domain across a L3 networks. VXLAN tunnels are traditionally created between leaf switches using the multicast control plane. This is not a big deal in small datacenters but is not scalable when expanding. By using the Ethernet VPN (EVPN) control plane and the Multi-Protocol BGP (MP-BGP) address family we can address the scalability issue with every node (switch) in the fabric becomes a part of the EVPN overlay.
+
+EVPN can be especially helpful in designs where a hierarchy is created utilizing spine-leaf pods interconnected by super-spines creating a modular fabric, or in the case of stretching L2 over a routed WAN link.
+
+Functionally, EVPN is a vitrual, logical overlay network running on top of a physical underlay network that need not be aware of the overlay. However, the overlay fabric is dependant upon the the underlay.
+
+* MP-BGP EVPN Overview
+In the context of VXLAN, EVPN is used as a Network Virtualization Overlay (NVO). To share Network Layer Reachability Informaiton (NLRI) between VTEPs. This can be either L2 VLANs for MAC addresses (MAC-VRF) or L3 IP prefix information (IP-VRF). Within the overlay network we can utilize VRF instances for multi-tenancy providing security and traffic isolation.
+
+Type-2 MAC-VRF routes utilize a VXLAN Network Identifier (VNI) that is mapped to a VLAN to advertise an end host's MAC and IP address. Any leaf confiured with the VNI will be able to share end-host MAC addresses to provide layer 2 reachability. As a switch learns locally attached MAC addresses they are then advertised to the EVPN enabling other leaf VTEPs to install the MAC in their CAM.
+
+IP Prefixes are advertised as Type-5 routes. A VNI is mapped to a Virtual Routing & Forwarding (VRF) context that identifies the customer/tenant/segment within the fabric. This uniqely allows route tables to coexist in each VRF. This allows end-to-end segmentation in the overlay with the underlay being unaware of the segmetation itself. For example, only the leaf switches need to possess the VRFs that the endpoints are attached to, the spine switches simply provide the underlay transit betweent he leafs.
+
+** What this means
+Functionally, this means that a VLAN can exist on multiple swithes that do not have layer 2 connectivity betwene them. As and example, in our case, a production can have the same IP network in multiple building locations.
+
+* Physical architecture
+** Terms
+_*Spine*_: A layer 3 switch that is unaware of any VXLAN overlay networks. This can be thought of as a Core or physical aggrregation layer to which leafs connect.
+_*Super-Spine*_: A layer 3 switch that is unaware of VXLAN overlay networks. This can be thought of as a higher level core that aggregates spine layer switches.
+_*Leaf*_: A layer 3 switch that participates in the underlay and overlay networks. This is where VTEPs exist. This can function as an access layer switch providing end-point connectivity as well as a L2 distribution switch aggregating L2 connectivity to downstream access switches.
+TODO: this would be a good spot for a diagram showing the different layers and physical conectivity.
+
+* Configuration - Underlay
+** Multi-Chassis Link Aggregation (MLAG)
+MLAG allows link aggregation (port-channel) of down stream devices to multiple chassis to provide higher bandwidth as well as eliminated the need for spanning-tree to block one link. The MLAG peer linke allows MAC tables to syncronize between the chassis. A common use case would be between a pair of leaf switches to provide access layer services to comput resources.
+*** The Basic Steps Are
+1) Configure MLAG Peering VLAN and place it in a trunk group (VLANs in trunk groups are only allowed on trunks that have the trunk group configured)
+2) Configure an SVI for the peering VLAN using a /30 or /31 peer-to-peer network that will only exist between the two switches
+3) Configure the physical interface(s) connected to the peer switch, placing them in a LAG
+4) Configure the Port-channel LAG as a trunk, add the trunk group, and set the spanning-tree link-type to point-to-point for fast transitioning
+5) Disable Spanning-Tree on the peering VLAN
+6) Configure MLAG >
+   + Set the domain ID (used to represent the MLAG pair)
+   + Specify the MLAG peer-link (the port-channel interface)
+   + Specify the point-to-point SVI to communicate to the other peer
+   + Specify the peer’s IP address
+   + Configure a virtual MAC to represent the MLAG (used later when deploying SVIs)
+
+#+BEGIN_SRC <ios>
+# leaf1
+! *step 1*
+!vlan 4093
+   name MLAG-Peer-Link
+   trunk group MLAG-Peer
+! *step 2*
+interface Vlan4093
+   description MLAG KeepAlive
+   mtu 9214
+   ip address 10.255.255.3/31
+!
+! *step 3*
+interface Ethernet7
+   description SIDELINK-leaf02:Et7
+   mtu 9214
+   channel-group 2000 mode active
+!
+interface Ethernet8
+   description SIDELINK-leaf02:Et8
+   mtu 9214
+   channel-group 2000 mode active
+!
+! *step 4*
+interface Port-Channel2000
+   description MLAG Peer Trunk
+   switchport mode trunk
+   switchport trunk group MLAG-Peer
+   spanning-tree link-type point-to-point
+!
+exit
+! *step 5*
+ no spanning-tree vlan-id 4093
+!
+! *step 6*
+mlag configuration
+   domain-id 10
+   local-interface Vlan4093
+   peer-address 10.255.255.2
+   peer-address heartbeat 192.168.1.72 vrf mgmt
+   peer-link Port-Channel2000
+!
+ip virtual-router mac-address c001.cafe.babe
+#+END_SRC
+
+Other than IP address, the configurations are the same on both swithes in the peer group.
+
+To prevent a dual-active state should the peer-link become severed we enable Dual-Active Detection or "peer keepalive" using another interface such as the management. This is part of the MLAG configuration.
+
+** Configure Underlay Addressing
+*** Configure Underlay Point-to-Point links (Spine to Leaf)
+Every leaf connects to every spine usign a /31 point-to-point segment.
+#+begin_src
+#spine1
+  interface Ethernet1
+     description DOWNLINK-leaf01:Et1
+     logging event link-status
+     no switchport
+     ip address 10.245.2.48/31
+  !
+  interface Ethernet2
+     description DOWNLINK-leaf02:Et1
+     logging event link-status
+     no switchport
+     ip address 10.245.2.50/31
+  !
+  interface Ethernet3
+     description DOWNLINK-lear3:Et1
+     logging event link-status
+     no switchport
+     ip address 10.245.2.56/31
+#+end_src
+
+#+begin_src
+#leaf1
+  interface Ethernet2
+     description UPLINK spine2:Et1
+     logging event link-status
+     no switchport
+     ip address 10.245.3.49/31
+  !
+  interface Ethernet1
+     description UPLINK spine1:Et1
+     logging event link-status
+     no switchport
+     ip address 10.245.2.49/31
+#+end_src
+
+*** Configure Underlay Point-to-Point links (Leaf to Leaf)
+Leaf switches will establish an iBGP relationship with thier peer to allow the EVPN to stay up in the event one of the leaf switches loses its connections to the spines. For this we use an SVI and add this vlan to the trunk group over the MLAG between the leafs.
+#+begin_src
+#leaf1
+  vlan 4092
+     name MLAG-iBGP
+     trunk group MLAG-Peer
+  interface Vlan4092
+     description IBGP Peering
+     ip address 10.255.255.0/31
+
+#leaf2
+  vlan 4092
+     name MLAG-iBGP
+     trunk group MLAG-Peer
+  interface Vlan4092
+     description IBGP Peering
+     ip address 10.255.255.1/31
+#+end_src
+*** Configure Loopbacks for BGP peering
+A /32 loopback interface is configrued on each leaf and spine to be used as the router-id int he BGP process on each switch. (We will generally use Lo0 for this purpose.)
+#+begin_src
+#spine1
+interface Loopback0
+   description RID
+   ip address 10.245.0.5/32
+#+end_src
+
+#+begin_src
+#leaf1
+interface Loopback0
+   description Underlay iBGP
+   ip address 10.245.0.25/32
+#+end_src
+
+** Configure Underlay Routing Process (BGP)
+*** Basic BGP
+We will assign a BGP process for each pair, spines and leafs. These will be eBGP relationships with each leaf (or leaf pair) or spine (or spine pair) having it's own AS number. The leafs will later use this for the overlay.
+#+BEGIN_SRC
+! spine1
+router bgp 64512
+  router-id 10.245.0.5
+  update wait-install
+  no bgp default ipv4-unicast
+  distance bgp 20 200 200
+  graceful-restart restart-time 300
+  maximum-paths 2 ecmp 2
+#+end_src
+
+ #+begin_src
+!  leaf1
+router bgp 64535
+   router-id 10.245.0.25
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+ #+end_src
+*** Underlay eBGP Neighbors
+Each spine will peer with each leaf over the L3 p-t-p interface. By using the /listen/ command on the spines we can dynamically create the BGP peering on this side. We set a range of addresses to listen for and assign them to a peer group whic then allows us to assign similar configuration parameters to all of the dynamically learned neighbors as long as they match a filter of known leaf ASNs..
+
+On the leafs we use a peer-group called *EBGP-UNDERLAY-IPV4* for repeat configuration parameters that will be applied to both spine adjecencies. On the spines we use a similary named peer group that the dynamically learned neighbors are added to.
+#+begin_src
+# spine1
+
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+
+router bgp 65000
+   router-id 10.245.0.5
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   bgp listen range 10.245.2.0/24 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.3.32/31 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 bfd
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
+
+ Note that there is a peer relationship over each link.
+ #+begin_src
+ # leaf1
+router bgp 64535
+   router-id 10.245.0.25
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 remote-as 64512
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   redistribute connected route-map REDIST-CONN-IPV4
+   neighbor 10.245.2.48 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.245.3.48 peer group EBGP-UNDERLAY-IPV4
+
+
+ #+end_src
+*** Underlay iBGP Neighbors
+IBGP sessions are configured between each MLAG leaf pair where applicable to handle failure scenarios.
+We can use a peer-group here to help in identifying that these are paramaters applied to the iBGP sessions even though there  will generally only be one peer.
+#+begin_src
+# leaf1
+router bgp 64535
+   router-id 10.245.0.25
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 peer group
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 remote-as 64535
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 next-hop-self
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 allowas-in 1
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 graceful-restart
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 send-community
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.255.255.1 peer group IBGP-MLAG-UNDERLAY-IPV4
+   redistribute connected route-map REDIST-CONN-IPV4
+#+end_src
+
+For both iBGP and eBGP neighbors we are redistributing all connected Loopbacks and point-to-point links. these are controlled with the REDIST-CONN-IPV4 route-map.
+#+begin_src
+ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
+ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
+ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4:ww
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+#+end_src
+
+*** Activate the BGP sessions
+In addition to specifying the neighbor it must be activated for the appropriate address-family. This can be done individually or by using the peer group that was defined previously. In the event of troubleshooting later, an individual neighbor can be shut down which overrides anytrhing applied by a peer group.
+#+begin_src
+# spine1
+router bgp 65000
+ address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+#+end_src
+On the leaf switches we activate the peer-groups
+#+begin_src
+# leaf1
+router bgp 64535
+ address-family ipv4
+ neighbor EBGP-UNDERLAY-IPV4 activate
+#+end_src
+
+** At this point the Underlay network should be functional.
+
+* Configure the EVPN Overlay
+** Enable EVPN Capabiity
+The command:
+#+begin_src
+service routing protocols model multi-agent
+#+end_src
+Enables EVPN capability.
+
+Some models of switch will require VXLAN routing to be enabled in the tcam profile:
+#+begin_src
+hardware tcam profile vxlan-routing
+#+end_src
+
+** Configure BGP EVPN Overlay - Leaf-to-Spine
+Here we are creating a BGP peering between the Spine and Leaf
+
+On each Leaf, configure a peer group with:
+
+- Neighbor to the Loopback IP address of each Spine using the Loopback0 interface as the source
+- Configure ebgp-multihop 3 to account for possibility of a Leaf needing to establish an EVPN BGP adjacency with a Spine through it’s peer link, this is in the case where there are two leafs with an MLAG between them
+- The send-community extended command is required for attributes to be sent between EVPN peers
+- Activate the evpn peer-group
+
+  #+begin_src
+  router bgp 64535
+   router-id 10.245.0.25
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 remote-as 64512
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 graceful-restart
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
+   neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
+
+   address-family evpn
+      neighbor EVPN-OVERLAY-IPV4 activate
+
+#+end_src
+
+** Configure BGP EVPN Overlay - Spine-to_Leaf
+On each Spine, configure a peer group with:
+
+- Neighbor to the Loopback IP address of each Leaf using the Loopback0 interface as the source
+- Configure ebgp-multihop 3 to account for possibility of a Leaf needing to establish an EVPN BGP adjacency with a Spine through it’s peer link
+- The send-community extended command is required for attributes to be sent between EVPN peers
+- By default, an eBGP speaker changes the next hop to itself when sending learned routes to eBGP neighbors. This is normal behavior used in most networks to ensure a recursion of routes, such as in the Underlay fabric. However, in the EVPN Overlay fabric, route recursion is possible without having to change the next-hop (e.g. leafs already know how to get to each other in the Underlay). Optimal routing tables can be achieved by setting next-hop-unchanged on the Spines facing the Leaf peers
+- Activate the evpn peer-group
+
+Normal BGP configuration each neighbor is explicilty defined, in our environment we utilize the "bgp listen range" command do dynamically create BGP peering relationships. This is filtered based on known loopback address ranges and ASNs that we use on the leafs.
+
+#+begin_src
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+!
+router bgp 64512
+   router-id 10.245.0.5
+   bgp listen range 10.245.0.0/24 peer-group EVPN-OVERLAY-IPV4 peer-filter LEAF-AS
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 next-hop-unchanged
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 bfd
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
+#+end_src
+
+** Validate EVPN Neighbors
+At this point the EVP neighbors should be estabished between the Leafs and Spines, so we are now ready to transport VXLAN traffic.
+
+From the perspective of the Spines we should have EVPN peering with each of the Leafs
+#+begin_src
+spine1#show bgp evpn summary
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.25 4 64535           5372      5372    0    0    3d04h Estab   9      9
+  10.245.0.26 4 64535           5376      5400    0    0    3d04h Estab   9      9
+  10.245.0.29 4 64539           5397      5394    0    0    3d04h Estab   10     10
+spine1#
+
+spine2#sh bgp evpn summary
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.25 4 64535           5377      5398    0    0    3d04h Estab   9      9
+  10.245.0.26 4 64535           5369      5388    0    0    3d04h Estab   9      9
+  10.245.0.29 4 64539           5390      5409    0    0    3d04h Estab   10     10
+spine2#
+#+end_src
+
+And from the perspective of the Leafs we should see peering with each of the Spines.
+#+begin_src
+leaf1-LAB#sh bgp evpn summ
+BGP summary information for VRF default
+Router identifier 10.245.0.25, local AS number 64535
+Neighbor Status Codes: m - Under maintenance
+  Neighbor   V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.5 4 64512           5374      5374    0    0    3d04h Estab   10     10
+  10.245.0.6 4 64512           5398      5377    0    0    3d04h Estab   10     10
+leaf1-LAB#
+#+end_src
+
+
+
+* Configure VXLAN Tunnel Endpoints (VTEP) - This happpens only on the leafs
+The VTEP is the tunnel interface that encapsulate/decapsulate and deliver L2 traffic over the L3 network between leafs in the EVPN fabric.
+- Configure a loopback interfce and IP that will be shared among the VTEP leaf pairs
+- Advertise the Loopback into BGP
+- Configure the VTEP interface
+
+** Configure Loopback1
+#+begin_src
+interface Loopback1
+ description Underlay
+ ip address 10.245.1.25/32
+ #+end_src
+** Advertise into BGP
+- this uses the route-map we saw earlier
+#+begin_src
+ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
+ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
+ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4:ww
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+#+end_src
+** Configure the VTEP interface
+- We use the just created Loopback 1 as the source and define the port. At this point we have not yet tied any traffic to use the tunnel.
+#+begin_src
+interface Vxlan1
+   vxlan source-interface Loopback1
+   vxlan udp-port 4789
+#+end_src
+
+* To pass traffic we need to map our L2 VLAN to  a VXLAN Network Identifier (VNI) which is uniquely used on each leaf we want the same vlan to appear.
+** Create the VLAN
+** Assign the VLAN a VNI within the vxlan interface
+** Apply BGP route distinguishers and route-targets
+** Redistribute learned MAC addresses into the overlay so they are seen at other leafs
+#+begin_src
+vlan 40
+ name test-l2-vxlan
+!
+int vxlan1
+ vxlan vlan 40 vni 100040
+
+router bgp 64535
+      vlan 40
+      rd 10.245.0.25:40
+      route-target both evpn 40:40
+      redistribute learned

@@ -1,0 +1,79 @@
+! Command: show running-config
+! device: leaf01 (vEOS-lab, EOS-4.28.0F)
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin privilege 15 role network-admin secret sha512 $6$gar16Tu8VAHPpqnu$uzdyojYOOWfe8VZknjHiaZVhCpQranILZ53cYOj/kBap8XCqMterINDYT1ROozwnr4JZSXcqg3OGi/NQ.j6w60
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model ribd
+!
+hostname leaf01
+!
+snmp-server community g00se ro
+snmp-server vrf mgmt
+!
+spanning-tree mode mstp
+no spanning-tree vlan-id 4092
+!
+vlan 4092
+   name MLAG-iBGP
+!
+vrf instance mgmt
+!
+aaa authorization exec default local
+!
+interface Ethernet1
+   description UPLINK spine1:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.2.49/31
+!
+interface Ethernet2
+   description UPLINK spine2:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.3.49/31
+!
+interface Ethernet3
+!
+interface Ethernet4
+!
+interface Ethernet5
+!
+interface Ethernet6
+!
+interface Ethernet7
+   description SIDELINK-leaf2:Et7
+   mtu 9214
+   logging event link-status
+   speed forced 40gfull
+   switchport mode trunk
+!
+interface Ethernet8
+!
+interface Loopback0
+   description Underlay eBGP
+   ip address 10.245.0.25/32
+!
+interface Management1
+   description oob-mgmt
+   vrf mgmt
+   ip address 192.168.1.71/24
+!
+interface Vlan4092
+   description IBGP Peering
+   mtu 9214
+   ip address 10.255.255.0/31
+!
+ip virtual-router mac-address 00:1c:aa:aa:aa:aa
+!
+ip routing
+no ip routing vrf mgmt
+!
+ip route vrf mgmt 0.0.0.0/0 192.168.1.1
+!
+end

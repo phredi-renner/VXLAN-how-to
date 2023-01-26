@@ -1,0 +1,100 @@
+﻿!
+service routing protocols model multi-agent
+!
+hostname spine1-LAB
+!
+!
+spanning-tree mode rapid-pvst
+!
+!
+!
+clock timezone US/Pacific
+!
+no vlan 1
+!
+vlan 4094
+   name Default
+!
+!
+interface Ethernet1
+   description DOWNLINK-leaf01:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.2.48/31
+!
+interface Ethernet2
+   description DOWNLINK-leaf02:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.2.50/31
+!
+interface Ethernet3
+   description DOWNLINK-leaf3:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.2.56/31
+!
+interface Loopback0
+   description RID
+   ip address 10.245.0.5/32
+!
+!
+hardware tcam
+   system profile vxlan-routing
+!
+!
+ip routing
+no ip routing vrf mgmt
+!
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
+ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
+ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
+ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+!
+router bgp 64512
+   router-id 10.245.0.5
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   bgp listen range 10.245.2.0/24 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.3.32/31 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.0.0/24 peer-group EVPN-OVERLAY-IPV4 peer-filter LEAF-AS
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 bfd
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 0
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 next-hop-unchanged
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 bfd
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY-IPV4 activate
+   !
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+!
+!
+!
+end

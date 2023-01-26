@@ -1,0 +1,51 @@
+! Command: show running-config
+! device: spine2 (vEOS-lab, EOS-4.28.0F)
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin privilege 15 role netowrk-admin secret sha512 $6$6ppuaZuV1dCabH4U$RAdd2isZDdOantXJbnPdHgQPM7kI2IQb0vFgYPQkfLMKEQm4F1wPlTIYMCB/f0YFKQLK0IOEFIiYjg/uvm.JY0
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model ribd
+!
+hostname spine2
+!
+snmp-server community g00se ro
+snmp-server vrf mgmt
+!
+spanning-tree mode mstp
+!
+vrf instance mgmt
+!
+aaa authorization exec default local
+!
+interface Ethernet1
+!
+interface Ethernet2
+!
+interface Ethernet3
+!
+interface Ethernet4
+!
+interface Ethernet5
+!
+interface Ethernet6
+!
+interface Ethernet7
+!
+interface Ethernet8
+!
+interface Management1
+   description oob-mgmt
+   vrf mgmt
+   ip address 192.168.1.75/24
+!
+ip routing
+no ip routing vrf mgmt
+!
+ip route vrf mgmt 0.0.0.0/0 192.168.1.1
+!
+end

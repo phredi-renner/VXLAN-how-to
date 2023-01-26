@@ -1,0 +1,251 @@
+﻿!
+hostname leaf3-LAB
+!
+spanning-tree mode rapid-pvst
+!
+!
+clock timezone US/Pacific
+!
+no vlan 1
+!
+vlan 50
+   name DMZ_VL50
+!
+vlan 220
+   name bluebeetle-vfx_VL220
+!
+vlan 228
+   name bluebeetle-ed_VL228
+!
+vlan 238
+   name cool8-vfx_VL238
+!
+vlan 2040
+   name tedlasso-editorial-nexus-l2
+!
+vlan 4094
+   name Default
+!
+vrf instance bluebeetle-ed_vrf
+!
+vrf instance bluebeetle-vfx_vrf
+!
+vrf instance cool8-vfx_vrf
+!
+vrf instance dmz_vrf1
+!
+vrf instance mgmt
+!
+vrf instance shared_services
+!
+!
+!
+!
+
+!interface Port-Channel20
+!   description DOWNLINK_TO_WB-US-BUR-PRODNET133-SS2
+!   logging event link-status
+!   switchport mode trunk
+!
+!
+!interface Ethernet45
+!   description DOWNLINK_TO_WB-US-BUR-PRODNET133-SS2:E49
+!   logging event link-status
+!   switchport mode trunk
+!   channel-group 20 mode active
+!
+!interface Ethernet46
+!   description DOWNLINK_TO_WB-US-BUR-PRODNET133-SS2:E50
+!   logging event link-status
+!   switchport mode trunk
+!   channel-group 20 mode active
+!
+!interface Ethernet47
+!   description DOWNLINK-wb-us-bur-prodnet133-ss1:e49
+!   switchport mode trunk
+!
+!interface Ethernet48
+!   description DOWNLINK-wb-us-bur-prodnet133-ss1:e50
+!   switchport mode trunk
+!
+!
+interface Ethernet1
+   description UPLINK spine1:Et3
+   logging event link-status
+   no switchport
+   ip address 10.245.2.57/31
+!
+interface Ethernet2
+   description UPLINK spine2:Et3
+   logging event link-status
+   no switchport
+   ip address 10.245.3.57/31
+!
+!
+interface Loopback0
+   description Underlay iBGP
+   ip address 10.245.0.29/32
+!
+interface Loopback1
+   ip address 10.245.1.29/32
+!
+interface Loopback2
+   description IP Helper Source IP
+   vrf shared_services
+   ip address 10.245.4.29/32
+!
+!
+interface Vlan50
+   vrf dmz_vrf1
+   ip helper-address 10.245.15.10 vrf shared_services source-interface Loopback2
+   ip address virtual 10.245.5.1/24
+!
+interface Vlan220
+   vrf bluebeetle-vfx_vrf
+   ip helper-address 10.245.15.10 vrf shared_services source-interface Loopback2
+   ip address virtual 10.245.66.129/27
+!
+interface Vlan228
+   vrf bluebeetle-ed_vrf
+   ip helper-address 10.245.15.10 vrf shared_services source-interface Loopback2
+   ip address virtual 10.245.67.129/27
+!
+interface Vlan238
+   vrf cool8-vfx_vrf
+   ip helper-address 10.245.15.10 vrf shared_services source-interface Loopback2
+   ip address virtual 10.245.68.193/27
+!
+interface Vxlan1
+   vxlan source-interface Loopback1
+   vxlan udp-port 4789
+   vxlan vlan 10-1000,2040 vni 10010-11000,202040
+   vxlan vrf bluebeetle-ed_vrf vni 20228
+   vxlan vrf bluebeetle-vfx_vrf vni 20220
+   vxlan vrf cool8-vfx_vrf vni 20238
+   vxlan vrf dmz_vrf1 vni 20050
+   vxlan vrf shared_services vni 20015
+!
+hardware tcam
+   system profile vxlan-routing
+!
+ip virtual-router mac-address aa:bb:cc:dd:ee:ff
+!
+ip routing
+ip routing vrf bluebeetle-ed_vrf
+ip routing vrf bluebeetle-vfx_vrf
+ip routing vrf cool8-vfx_vrf
+ip routing vrf dmz_vrf1
+no ip routing vrf mgmt
+ip routing vrf shared_services
+!
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
+ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
+ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
+ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
+!
+ip route vrf mgmt 0.0.0.0/0 10.245.16.33
+!
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+router bgp 64539
+   router-id 10.245.0.29
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 remote-as 64512
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 remote-as 64512
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 graceful-restart
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
+   neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
+   neighbor 10.245.2.56 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.245.3.56 peer group EBGP-UNDERLAY-IPV4
+   redistribute connected route-map REDIST-CONN-IPV4
+   !
+   vlan 2040
+      rd 10.245.0.29:2040
+      route-target both 2040:2040
+      redistribute learned
+   !
+   vlan-aware-bundle bluebeetle-ed_vrf
+      rd 10.245.0.29:228
+      route-target both 228:228
+      redistribute learned
+      vlan 228
+   !
+   vlan-aware-bundle bluebeetle-vfx_vrf
+      rd 10.245.0.29:220
+      route-target both 220:220
+      redistribute learned
+      vlan 220
+   !
+   vlan-aware-bundle cool8-vfx_vrf
+      rd 10.245.0.29:238
+      route-target both 238:238
+      redistribute learned
+      vlan 238
+   !
+   vlan-aware-bundle dmz_vrf1
+      rd 10.245.0.29:50
+      route-target both 50:50
+      redistribute learned
+      vlan 50
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY-IPV4 activate
+   !
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+   !
+   vrf bluebeetle-ed_vrf
+      rd 10.245.0.29:228
+      route-target import evpn 228:228
+      route-target export evpn 228:228
+      redistribute connected
+   !
+   vrf bluebeetle-vfx_vrf
+      rd 10.245.0.29:220
+      route-target import evpn 220:220
+      route-target export evpn 220:220
+      redistribute connected
+   !
+   vrf cool8-vfx_vrf
+      rd 10.245.0.29:238
+      route-target import evpn 238:238
+      route-target export evpn 238:238
+      redistribute connected
+   !
+   vrf dmz_vrf1
+      rd 10.245.0.29:50
+      route-target import evpn 50:50
+      route-target export evpn 50:50
+      redistribute connected
+   !
+   vrf shared_services
+      rd 10.245.0.29:10
+      route-target import evpn 10:15
+      route-target export evpn 10:15
+      redistribute connected
+!
+!
+end

@@ -1,0 +1,82 @@
+! Command: show running-config
+! device: leaf03 (vEOS-lab, EOS-4.28.0F)
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin privilege 15 role network-admin secret sha512 $6$UExy8LIzPcH4g5M0$EuYk8rwTM9nQCSksZgyxZsFspWtZB/ArVy9Bl1LFOzrzPHtQjLjeaNn5Cda6hHimw6cM.ZX8DELgADfXeDJZt0
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model ribd
+!
+hostname leaf03
+!
+snmp-server community g00se ro
+snmp-server vrf mgmt
+!
+spanning-tree mode mstp
+!
+vrf instance mgmt
+!
+aaa authorization exec default local
+!
+interface Ethernet1
+   description UPLINK spine1:Et3
+   logging event link-status
+   no switchport
+   ip address 10.245.2.57/31
+!
+interface Ethernet2
+   description UPLINK spine2:Et3
+   logging event link-status
+   no switchport
+   ip address 10.245.3.57/31
+!
+interface Ethernet3
+!
+interface Ethernet4
+!
+interface Ethernet5
+!
+interface Ethernet6
+!
+interface Ethernet7
+!
+interface Ethernet8
+!
+interface Loopback0
+   description Underlay eBGP
+   ip address 10.245.0.29/32
+!
+interface Management1
+   description oob-mgmt
+   vrf mgmt
+   ip address 192.168.1.73/24
+!
+ip routing
+no ip routing vrf mgmt
+!
+ip route vrf mgmt 0.0.0.0/0 192.168.1.1
+!
+router bgp 64539
+   router-id 10.245.0.29
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 remote-as 64512
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.245.2.56 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.245.3.56 peer group EBGP-UNDERLAY-IPV4
+   !
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+!
+end

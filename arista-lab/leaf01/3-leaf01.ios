@@ -1,0 +1,121 @@
+! Command: show running-config
+! device: leaf01 (vEOS-lab, EOS-4.28.0F)
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin privilege 15 role network-admin secret sha512 $6$gar16Tu8VAHPpqnu$uzdyojYOOWfe8VZknjHiaZVhCpQranILZ53cYOj/kBap8XCqMterINDYT1ROozwnr4JZSXcqg3OGi/NQ.j6w60
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model ribd
+!
+hostname leaf01
+!
+snmp-server community g00se ro
+snmp-server vrf mgmt
+!
+spanning-tree mode mstp
+no spanning-tree vlan-id 4092
+!
+vlan 4092
+   name MLAG-iBGP
+!
+vrf instance mgmt
+!
+aaa authorization exec default local
+!
+interface Ethernet1
+   description UPLINK spine1:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.2.49/31
+!
+interface Ethernet2
+   description UPLINK spine2:Et1
+   logging event link-status
+   no switchport
+   ip address 10.245.3.49/31
+!
+interface Ethernet3
+!
+interface Ethernet4
+!
+interface Ethernet5
+!
+interface Ethernet6
+!
+interface Ethernet7
+   description SIDELINK-leaf2:Et7
+   mtu 9214
+   logging event link-status
+   speed forced 40gfull
+   switchport mode trunk
+!
+interface Ethernet8
+!
+interface Loopback0
+   description Underlay eBGP
+   ip address 10.245.0.25/32
+!
+interface Management1
+   description oob-mgmt
+   vrf mgmt
+   ip address 192.168.1.71/24
+!
+interface Vlan4092
+   description IBGP Peering
+   mtu 9214
+   ip address 10.255.255.0/31
+!
+ip virtual-router mac-address 00:1c:aa:aa:aa:aa
+!
+ip routing
+no ip routing vrf mgmt
+!
+ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
+ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
+ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
+!
+ip route vrf mgmt 0.0.0.0/0 192.168.1.1
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+router bgp 64535
+   router-id 10.245.0.25
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 remote-as 64512
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 peer group
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 remote-as 64535
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 next-hop-self
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 allowas-in 1
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 graceful-restart
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 send-community
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.245.2.48 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.245.3.48 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.255.255.1 peer group IBGP-MLAG-UNDERLAY-IPV4
+   redistribute connected route-map REDIST-CONN-IPV4
+   !
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
+!
+end

@@ -1,0 +1,32 @@
+conf t
+  vlan 4093
+  name MLAG-Peer-Link
+  trunk group MLAG-Peer
+  no spanning-tree vlan 4093
+  exit
+  int vlan 4093
+  description MLAG KeepAlive
+  ip address 10.255.255.3/31
+  exit
+  interface Ethernet7
+     description SIDELINK-leaf02:Et7
+     switchport mode trunk
+     channel-group 2000 mode active
+  !
+  interface Ethernet8
+     description SIDELINK-leaf02:Et8
+     switchport mode trunk
+     channel-group 2000 mode active
+  exit
+  interface Port-Channel2000
+     description MLAG Peer Trunk
+     switchport mode trunk
+     switchport trunk group MLAG-Peer
+     spanning-tree link-type point-to-point
+  sh run
+  mlag configuration
+  domain-id 10
+  peer-link port-Channel 2000
+  local-interface vlan 4093
+  peer-address 10.255.255.2
+  show mlag

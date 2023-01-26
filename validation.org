@@ -1,0 +1,425 @@
+#+title: Validation
+
+* Underlay
+
+** Spine 1
+spine1#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.49 4 64535             87       106    0    0 01:25:45 Estab   0      0
+  10.245.2.51 4 64535             88       107    0    0 01:26:02 Estab   0      0
+  10.245.2.57 4 64539             79        93    0    0 01:15:06 Estab   0      0
+spine1#
+
+spine1#sh ip route
+
+VRF: default
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ C        10.245.0.5/32 is directly connected, Loopback0
+ C        10.245.2.48/31 is directly connected, Ethernet1
+ C        10.245.2.50/31 is directly connected, Ethernet2
+ C        10.245.2.56/31 is directly connected, Ethernet3
+
+spine1#
+** Spine2
+spine2#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.3.49 4 64535             88       107    0    0 01:26:20 Estab   0      0
+  10.245.3.51 4 64535             88       108    0    0 01:26:37 Estab   0      0
+  10.245.3.57 4 64539             79        93    0    0 01:15:42 Estab   0      0
+spine2#
+
+spine2#sh ip route
+
+VRF: default
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ C        10.245.0.6/32 is directly connected, Loopback0
+ C        10.245.3.48/31 is directly connected, Ethernet1
+ C        10.245.3.50/31 is directly connected, Ethernet2
+ C        10.245.3.56/31 is directly connected, Ethernet3
+
+spine2#
+
+** Leaf1
+leaf01#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.25, local AS number 64535
+Neighbor Status Codes: m - Under maintenance
+  Neighbor         V  AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.48      4  64512             20        15    0    0 00:13:07 Estab   4      4
+  10.245.3.48      4  64512             20        15    0    0 00:13:05 Estab   4      4
+  10.255.255.1     4  64535             12        12    0    0 00:10:42 Estab   0      0
+leaf01#
+leaf01#
+leaf01#sh ip route
+
+VRF: default
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      10.245.0.5/32 [20/0] via 10.245.2.48, Ethernet1
+ B E      10.245.0.6/32 [20/0] via 10.245.3.48, Ethernet2
+ C        10.245.0.25/32 is directly connected, Loopback0
+ C        10.245.2.48/31 is directly connected, Ethernet1
+ B E      10.245.2.50/31 [20/0] via 10.245.2.48, Ethernet1
+ B E      10.245.2.56/31 [20/0] via 10.245.2.48, Ethernet1
+ C        10.245.3.48/31 is directly connected, Ethernet2
+ B E      10.245.3.50/31 [20/0] via 10.245.3.48, Ethernet2
+ B E      10.245.3.56/31 [20/0] via 10.245.3.48, Ethernet2
+ C        10.255.255.0/31 is directly connected, Vlan4092
+
+leaf01#
+
+** Leaf2
+leaf02#wr mem
+Copy completed successfully.
+leaf02#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.26, local AS number 64535
+Neighbor Status Codes: m - Under maintenance
+  Neighbor         V  AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.50      4  64512            109        89    0    0 01:27:55 Estab   4      4
+  10.245.3.50      4  64512            109        89    0    0 01:27:53 Estab   4      4
+  10.255.255.0     4  64535             87        87    0    0 01:25:13 Estab   0      0
+leaf02#sh ip route
+
+VRF: default
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      10.245.0.5/32 [20/0] via 10.245.2.50, Ethernet1
+ B E      10.245.0.6/32 [20/0] via 10.245.3.50, Ethernet2
+ C        10.245.0.26/32 is directly connected, Loopback0
+ B E      10.245.2.48/31 [20/0] via 10.245.2.50, Ethernet1
+ C        10.245.2.50/31 is directly connected, Ethernet1
+ B E      10.245.2.56/31 [20/0] via 10.245.2.50, Ethernet1
+ B E      10.245.3.48/31 [20/0] via 10.245.3.50, Ethernet2
+ C        10.245.3.50/31 is directly connected, Ethernet2
+ B E      10.245.3.56/31 [20/0] via 10.245.3.50, Ethernet2
+ C        10.255.255.0/31 is directly connected, Vlan4092
+
+leaf02#
+
+** Leaf3
+leaf03#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.29, local AS number 64539
+Neighbor Status Codes: m - Under maintenance
+  Neighbor         V  AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.56      4  64512             96        81    0    0 01:17:25 Estab   4      4
+  10.245.3.56      4  64512             95        81    0    0 01:17:25 Estab   4      4
+leaf03#sh ip route
+
+VRF: default
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      10.245.0.5/32 [20/0] via 10.245.2.56, Ethernet1
+ B E      10.245.0.6/32 [20/0] via 10.245.3.56, Ethernet2
+ C        10.245.0.29/32 is directly connected, Loopback0
+ B E      10.245.2.48/31 [20/0] via 10.245.2.56, Ethernet1
+ B E      10.245.2.50/31 [20/0] via 10.245.2.56, Ethernet1
+ C        10.245.2.56/31 is directly connected, Ethernet1
+ B E      10.245.3.48/31 [20/0] via 10.245.3.56, Ethernet2
+ B E      10.245.3.50/31 [20/0] via 10.245.3.56, Ethernet2
+ C        10.245.3.56/31 is directly connected, Ethernet2
+
+leaf03#
+* Overlay
+
+** Each Spine will have EVPN peers with each leaf
+** Spine 1
+spine1#sh bgp evpn summ
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.25 4 64535              7         6    0    0 00:02:24 Estab   0      0
+  10.245.0.26 4 64535              6         6    0    0 00:02:28 Estab   0      0
+  10.245.0.29 4 64539              6         6    0    0 00:02:26 Estab   0      0
+spine1#
+** Spine2
+spine2#sh bgp evpn summ
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.25 4 64535              8         8    0    0 00:03:31 Estab   0      0
+  10.245.0.26 4 64535              8         7    0    0 00:03:35 Estab   0      0
+  10.245.0.29 4 64539              8         7    0    0 00:03:31 Estab   0      0
+spine2#
+
+** Each leaf will have evpn peers with each Spine
+** Leaf1
+leaf01#sh bgp evpn summ
+BGP summary information for VRF default
+Router identifier 10.245.0.25, local AS number 64535
+Neighbor Status Codes: m - Under maintenance
+  Neighbor   V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.5 4 64512              4         4    0    0 00:00:43 Estab   0      0
+  10.245.0.6 4 64512              4         4    0    0 00:00:43 Estab   0      0
+leaf01#
+
+============================
+** pc41
+VPCS> ping 40.40.40.43
+
+84 bytes from 40.40.40.43 icmp_seq=1 ttl=64 time=29.168 ms
+84 bytes from 40.40.40.43 icmp_seq=2 ttl=64 time=21.503 ms
+84 bytes from 40.40.40.43 icmp_seq=3 ttl=64 time=24.575 ms
+84 bytes from 40.40.40.43 icmp_seq=4 ttl=64 time=24.917 ms
+84 bytes from 40.40.40.43 icmp_seq=5 ttl=64 time=23.577 ms
+
+VPCS> show
+
+NAME   IP/MASK              GATEWAY                             GATEWAY
+VPCS1  40.40.40.41/24       40.40.40.1
+       fe80::250:79ff:fe66:6806/64
+
+VPCS>
+
+** PC43
+VPCS> ping 40.40.40.41
+
+84 bytes from 40.40.40.41 icmp_seq=1 ttl=64 time=58.359 ms
+84 bytes from 40.40.40.41 icmp_seq=2 ttl=64 time=26.050 ms
+84 bytes from 40.40.40.41 icmp_seq=3 ttl=64 time=18.370 ms
+84 bytes from 40.40.40.41 icmp_seq=4 ttl=64 time=23.212 ms
+84 bytes from 40.40.40.41 icmp_seq=5 ttl=64 time=22.259 ms
+
+VPCS> show
+
+NAME   IP/MASK              GATEWAY                             GATEWAY
+VPCS1  40.40.40.43/24       40.40.40.1
+       fe80::250:79ff:fe66:6808/64
+
+VPCS>
+
+** leaf01
+leaf01#sh vxlan vtep
+Remote VTEPS for Vxlan1:
+
+VTEP              Tunnel Type(s)
+----------------- --------------
+10.245.1.29       unicast, flood
+
+Total number of remote VTEPS:  1
+leaf01#show bgp evpn route-type ip-prefix ipv4
+BGP routing table information for VRF default
+Router identifier 10.245.0.25, local AS number 64535
+Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
+                    c - Contributing to ECMP, % - Pending BGP convergence
+Origin codes: i - IGP, e - EGP, ? - incomplete
+AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Link Local Nexthop
+
+          Network                Next Hop              Metric  LocPref Weight  Path
+ * >      RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
+                                 -                     -       -       0       i
+ * >Ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.29           -       100     0       64512 64539 i
+ *  ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.29           -       100     0       64512 64539 i
+leaf01#sh ip route vrf gold_vrf
+
+VRF: gold_vrf
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      40.40.40.43/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ B E      40.40.40.45/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ C        40.40.40.0/24 is directly connected, Vlan40
+
+leaf01#
+leaf01#sh ip arp vrf gold_vrf
+Address         Age (sec)  Hardware Addr   Interface
+40.40.40.41       0:12:05  0050.7966.6806  Vlan40, Ethernet4
+40.40.40.43             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.45             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.46       0:16:42  0050.7966.6808  Vlan40, Vxlan1
+leaf01#
+
+** leaf02
+leaf02#sh vxlan vtep
+Remote VTEPS for Vxlan1:
+
+VTEP              Tunnel Type(s)
+----------------- --------------
+10.245.1.29       unicast, flood
+
+Total number of remote VTEPS:  1
+leaf02#show bgp evpn route-type ip-prefix ipv4
+BGP routing table information for VRF default
+Router identifier 10.245.0.26, local AS number 64535
+Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
+                    c - Contributing to ECMP, % - Pending BGP convergence
+Origin codes: i - IGP, e - EGP, ? - incomplete
+AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Link Local Nexthop
+
+          Network                Next Hop              Metric  LocPref Weight  Path
+ * >      RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
+                                 -                     -       -       0       i
+ * >Ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.29           -       100     0       64512 64539 i
+ *  ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.29           -       100     0       64512 64539 i
+leaf02#sh ip route vrf gold_vrf
+
+VRF: gold_vrf
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      40.40.40.43/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ B E      40.40.40.45/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ C        40.40.40.0/24 is directly connected, Vlan40
+
+leaf02#
+leaf02#sh ip arp vrf gold_vrf
+Address         Age (sec)  Hardware Addr   Interface
+40.40.40.41       0:11:41  0050.7966.6806  Vlan40, Ethernet7
+40.40.40.43             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.45             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.46       0:16:18  0050.7966.6808  Vlan40, Vxlan1
+leaf02#
+
+** leaf03
+leaf03#sh vxlan vtep
+Remote VTEPS for Vxlan1:
+
+VTEP              Tunnel Type(s)
+----------------- --------------
+10.245.1.25       flood, unicast
+
+Total number of remote VTEPS:  1
+leaf03#sh bgp evpn route-type ip-prefix ipv4
+BGP routing table information for VRF default
+Router identifier 10.245.0.29, local AS number 64539
+Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
+                    c - Contributing to ECMP, % - Pending BGP convergence
+Origin codes: i - IGP, e - EGP, ? - incomplete
+AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Link Local Nexthop
+
+          Network                Next Hop              Metric  LocPref Weight  Path
+ * >Ec    RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.25           -       100     0       64512 64535 i
+ *  ec    RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.25           -       100     0       64512 64535 i
+ * >Ec    RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.25           -       100     0       64512 64535 i
+ *  ec    RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
+                                 10.245.1.25           -       100     0       64512 64535 i
+ * >      RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
+                                 -                     -       -       0       i
+leaf03#show ip route vrf gold_vrf
+
+VRF: gold_vrf
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      40.40.40.41/32 [20/0] via VTEP 10.245.1.25 VNI 100001 router-mac 50:00:00:d7:ee:0b local-interface Vxlan1
+                                via VTEP 10.245.1.25 VNI 100001 router-mac 50:00:00:cb:38:c2 local-interface Vxlan1
+ C        40.40.40.0/24 is directly connected, Vlan40
+
+leaf03#
+leaf03#sh ip arp vrf gold_vrf
+Address         Age (sec)  Hardware Addr   Interface
+40.40.40.41             -  0050.7966.6806  Vlan40, Vxlan1
+40.40.40.43       0:11:48  0050.7966.6808  Vlan40, Ethernet4
+40.40.40.45       0:19:00  0050.7966.6808  Vlan40, Ethernet4
+leaf03#

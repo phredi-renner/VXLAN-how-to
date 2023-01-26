@@ -1,0 +1,126 @@
+! Command: show running-config
+! device: spine2 (vEOS-lab, EOS-4.28.0F)
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin privilege 15 role netowrk-admin secret sha512 $6$6ppuaZuV1dCabH4U$RAdd2isZDdOantXJbnPdHgQPM7kI2IQb0vFgYPQkfLMKEQm4F1wPlTIYMCB/f0YFKQLK0IOEFIiYjg/uvm.JY0
+!
+ip dhcp relay information option
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model multi-agent
+!
+hostname spine2
+!
+snmp-server community g00se ro
+snmp-server vrf mgmt
+!
+spanning-tree mode rapid-pvst
+!
+clock timezone US/Pacific
+!
+no vlan 1
+!
+vlan 4094
+   name Default
+!
+vrf instance mgmt
+!
+aaa authorization exec default local
+!
+interface Ethernet1
+   description DOWNLINK-leaf1:Et2
+   logging event link-status
+   no switchport
+   ip address 10.245.3.48/31
+!
+interface Ethernet2
+   description DOWNLINK-leaf2:Et2
+   logging event link-status
+   no switchport
+   ip address 10.245.3.50/31
+!
+interface Ethernet3
+   description DOWNLINK-leaf3:Et2
+   logging event link-status
+   no switchport
+   ip address 10.245.3.56/31
+!
+interface Ethernet4
+!
+interface Ethernet5
+!
+interface Ethernet6
+!
+interface Ethernet7
+!
+interface Ethernet8
+!
+interface Loopback0
+   description RID
+   ip address 10.245.0.6/32
+!
+interface Management1
+   description oob-mgmt
+   vrf mgmt
+   ip address 192.168.1.75/24
+!
+interface Vlan110
+!
+ip routing
+no ip routing vrf mgmt
+!
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
+ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
+ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
+ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
+!
+ip route vrf mgmt 0.0.0.0/0 192.168.1.1
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 32
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+!
+router bgp 64512
+   router-id 10.245.0.6
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   bgp listen range 10.245.2.32/31 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.3.0/24 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.0.0/24 peer-group EVPN-OVERLAY-IPV4 peer-filter LEAF-AS
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 bfd
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 0
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 next-hop-unchanged
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 bfd
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY-IPV4 activate
+   !
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+!
+end
