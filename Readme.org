@@ -305,6 +305,8 @@ router bgp 64535
 #+end_src
 
 #+begin_src
+leaf03
+!
 router bgp 64539
    router-id 10.245.0.29
    update wait-install
