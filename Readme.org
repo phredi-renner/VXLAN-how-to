@@ -104,10 +104,6 @@ leaf01
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.25/32
-!
-interface Loopback1
-   description VTEP Source
-   ip address 10.245.1.25/32
 #+end_src
 
 #+begin_src
@@ -116,10 +112,6 @@ leaf02
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.26/32
-!
-interface Loopback1
-   description VTEP Source
-   ip address 10.245.1.26/32
 #+end_src
 
 #+begin_src
@@ -128,10 +120,6 @@ leaf03
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.29/32
-!
-interface Loopback1
-   description VTEP Source
-   ip address 10.245.1.29/32
 #+end_src
 
 ** For the interconnected leafs we need to create a layer three SVI to later be used for iBGP peering
@@ -585,13 +573,32 @@ The VTEP is the tunnel interface that encapsulate/decapsulate and deliver L2 tra
 
 ** Configure Loopback1
 #+begin_src
+leaf01
+!
 interface Loopback1
- description Underlay
- ip address 10.245.1.25/32
- #+end_src
+   description VTEP Source
+   ip address 10.245.1.25/32
+#+end_src
+
+#+begin_src
+leaf02
+!
+interface Loopback1
+   description VTEP Source
+   ip address 10.245.1.26/32
+#+end_src
+
+#+begin_src
+leaf03
+!
+interface Loopback1
+   description VTEP Source
+   ip address 10.245.1.29/32
+#+end_src
 ** Advertise into BGP
 - this uses the route-map we saw earlier
 #+begin_src
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
 ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
 ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
 ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
