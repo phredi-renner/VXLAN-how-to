@@ -340,14 +340,15 @@ router bgp 64539
       neighbor EBGP-UNDERLAY-IPV4 activate
 #+end_src
 
-For both iBGP and eBGP neighbors we are redistributing all connected Loopbacks and point-to-point links. These are controlled with the REDIST-CONN-IPV4 route-map. due to standardization we can use the same prefix-list and route-map on both spine and leaf.
+For both iBGP and eBGP neighbors we are redistributing all connected Loopbacks and point-to-point links. These are controlled with the REDIST-CONN-IPV4 route-map. Due to standardization we can use the same prefix-list and route-map on both spine and leaf.
 #+begin_src
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
 ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
 ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
 ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
 !
 route-map REDIST-CONN-IPV4 permit 10
-   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4:ww
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
 !
 route-map REDIST-CONN-IPV4 permit 20
    match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
