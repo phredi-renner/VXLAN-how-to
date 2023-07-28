@@ -104,6 +104,10 @@ leaf01
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.25/32
+!
+interface Loopback1
+   description VTEP Source
+   ip address 10.245.1.25/32
 #+end_src
 
 #+begin_src
@@ -112,6 +116,10 @@ leaf02
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.26/32
+!
+interface Loopback1
+   description VTEP Source
+   ip address 10.245.1.26/32
 #+end_src
 
 #+begin_src
@@ -120,6 +128,10 @@ leaf03
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.29/32
+!
+interface Loopback1
+   description VTEP Source
+   ip address 10.245.1.29/32
 #+end_src
 
 ** For the interconnected leafs we need to create a layer three SVI to later be used for iBGP peering
