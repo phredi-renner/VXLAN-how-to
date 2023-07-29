@@ -361,6 +361,15 @@ Neighbor Status Codes: m - Under maintenance
   10.245.2.51 4 64535             88       107    0    0 01:26:02 Estab   0      0
   10.245.2.57 4 64539             79        93    0    0 01:15:06 Estab   0      0
 spine1#
+spine1#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+----------- ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.2.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.57       64539 Established   IPv4 Unicast            Negotiated              3          3
+spine1#
 #+end_src
 
 #+begin_src
@@ -372,6 +381,15 @@ Neighbor Status Codes: m - Under maintenance
   10.245.3.49 4 64535             88       107    0    0 01:26:20 Estab   0      0
   10.245.3.51 4 64535             88       108    0    0 01:26:37 Estab   0      0
   10.245.3.57 4 64539             79        93    0    0 01:15:42 Estab   0      0
+spine2#
+spine2#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+----------- ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.3.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.57       64539 Established   IPv4 Unicast            Negotiated              3          3
 spine2#
 #+end_src
 
@@ -541,6 +559,18 @@ Neighbor Status Codes: m - Under maintenance
   10.245.0.26 4 64535           5376      5400    0    0    3d04h Estab   9      9
   10.245.0.29 4 64539           5397      5394    0    0    3d04h Estab   10     10
 spine1#
+spine1#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+----------- ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.0.25       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.26       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.29       64539 Established   L2VPN EVPN              Negotiated              0          0
+10.245.2.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.57       64539 Established   IPv4 Unicast            Negotiated              3          3
+spine1#
 
 spine2#sh bgp evpn summary
 BGP summary information for VRF default
@@ -550,6 +580,18 @@ Neighbor Status Codes: m - Under maintenance
   10.245.0.25 4 64535           5377      5398    0    0    3d04h Estab   9      9
   10.245.0.26 4 64535           5369      5388    0    0    3d04h Estab   9      9
   10.245.0.29 4 64539           5390      5409    0    0    3d04h Estab   10     10
+spine2#
+spine2#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+----------- ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.0.25       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.26       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.29       64539 Established   L2VPN EVPN              Negotiated              0          0
+10.245.3.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.57       64539 Established   IPv4 Unicast            Negotiated              3          3
 spine2#
 #+end_src
 
@@ -563,6 +605,17 @@ Neighbor Status Codes: m - Under maintenance
   10.245.0.5 4 64512           5374      5374    0    0    3d04h Estab   10     10
   10.245.0.6 4 64512           5398      5377    0    0    3d04h Estab   10     10
 leaf1-LAB#
+leaf01#
+leaf01#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.25, local AS number 64535
+Neighbor              AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+------------ ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.0.5         64512 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.6         64512 Established   L2VPN EVPN              Negotiated              0          0
+10.245.2.48        64512 Established   IPv4 Unicast            Negotiated              6          6
+10.245.3.48        64512 Established   IPv4 Unicast            Negotiated              6          6
+leaf01#
 #+end_src
 
 * Configure VXLAN Tunnel Endpoints (VTEP) - This happpens only on the leafs
