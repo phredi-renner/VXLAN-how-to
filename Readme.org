@@ -487,8 +487,8 @@ On each Leaf, configure a peer group with:
 - Activate the evpn peer-group
 
   #+begin_src
+leaf1 and leaf2
   router bgp 64535
-   router-id 10.245.0.25
    neighbor EVPN-OVERLAY-IPV4 peer group
    neighbor EVPN-OVERLAY-IPV4 remote-as 64512
    neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
@@ -502,7 +502,23 @@ On each Leaf, configure a peer group with:
 
    address-family evpn
       neighbor EVPN-OVERLAY-IPV4 activate
+#+end_src
+  #+begin_src
+leaf3
+  router bgp 64539
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 remote-as 64512
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 graceful-restart
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
+   neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
 
+   address-family evpn
+      neighbor EVPN-OVERLAY-IPV4 activate
 #+end_src
 
 ** Configure BGP EVPN Overlay - Spine-to_Leaf
