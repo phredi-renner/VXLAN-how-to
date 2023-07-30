@@ -270,6 +270,7 @@ router bgp 64535
 !
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
+      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
    #+end_src
 
 #+begin_src
@@ -302,6 +303,7 @@ router bgp 64535
 !
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
+      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
 #+end_src
 
 #+begin_src
