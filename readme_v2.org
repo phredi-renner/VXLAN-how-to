@@ -810,7 +810,8 @@ router bgp 64536
     route-target import evpn 40:40
     route-target export evpn 40:40
     redistribute connected
- #+end_src
+#+end_src
+#+begin_src
 Leaf03
 !
 vrf instance gold_vrf
