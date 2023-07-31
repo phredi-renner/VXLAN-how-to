@@ -9,7 +9,7 @@ username admin privilege 15 role network-admin secret sha512 $6$UExy8LIzPcH4g5M0
 !
 transceiver qsfp default-mode 4x10G
 !
-service routing protocols model ribd
+service routing protocols model multi-agent
 !
 hostname leaf03
 !
@@ -18,9 +18,23 @@ snmp-server vrf mgmt
 !
 spanning-tree mode mstp
 !
+vlan 40
+   name test-l2-vlan
+!
+vrf instance gold_vrf
+!
 vrf instance mgmt
 !
 aaa authorization exec default local
+!
+interface Port-Channel13
+   description DOWNLINK_ESI_TO_AS1
+   switchport mode trunk
+   !
+   evpn ethernet-segment
+      identifier 0003:0003:0003:0003:0003
+      route-target import 00:00:00:00:00:03
+   lacp system-id 0000.0000.0003
 !
 interface Ethernet1
    description UPLINK spine1:Et3
@@ -37,12 +51,16 @@ interface Ethernet2
 interface Ethernet3
 !
 interface Ethernet4
+   switchport access vlan 40
 !
 interface Ethernet5
 !
 interface Ethernet6
 !
 interface Ethernet7
+   description DOWNLINK_ESI_TO_AS1
+   switchport mode trunk
+   channel-group 13 mode active
 !
 interface Ethernet8
 !
@@ -50,13 +68,30 @@ interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.29/32
 !
+interface Loopback1
+   description VTEP Source
+   ip address 10.245.1.29/32
+!
 interface Management1
    description oob-mgmt
    vrf mgmt
    ip address 192.168.1.73/24
 !
+interface Vlan40
+   vrf gold_vrf
+   ip address virtual 40.40.40.1/24
+!
+interface Vxlan1
+   vxlan source-interface Loopback1
+   vxlan udp-port 4789
+   vxlan vlan 40 vni 100040
+   vxlan vrf gold_vrf vni 100001
+!
 ip routing
+ip routing vrf gold_vrf
 no ip routing vrf mgmt
+!
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
 !
 ip route vrf mgmt 0.0.0.0/0 192.168.1.1
 !
@@ -73,10 +108,35 @@ router bgp 64539
    neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
    neighbor EBGP-UNDERLAY-IPV4 send-community
    neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor EVPN-OVERLAY-IPV4 peer group
+   neighbor EVPN-OVERLAY-IPV4 remote-as 64512
+   neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
+   neighbor EVPN-OVERLAY-IPV4 graceful-restart
+   neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
+   neighbor EVPN-OVERLAY-IPV4 send-community
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
+   neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
    neighbor 10.245.2.56 peer group EBGP-UNDERLAY-IPV4
    neighbor 10.245.3.56 peer group EBGP-UNDERLAY-IPV4
+   redistribute connected route-map REDIST-CONN-IPV4
+   !
+   vlan 40
+      rd 10.245.0.29:40
+      route-target both 40:40
+      redistribute learned
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY-IPV4 activate
    !
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
+   !
+   vrf gold_vrf
+      rd 10.245.0.29:40
+      route-target import evpn 40:40
+      route-target export evpn 40:40
+      redistribute connected
 !
 end

@@ -9,7 +9,7 @@ username admin privilege 15 role network-admin secret sha512 $6$gar16Tu8VAHPpqnu
 !
 transceiver qsfp default-mode 4x10G
 !
-service routing protocols model ribd
+service routing protocols model multi-agent
 !
 hostname leaf01
 !
@@ -23,16 +23,8 @@ vrf instance mgmt
 aaa authorization exec default local
 !
 interface Ethernet1
-   description UPLINK spine1:Et1
-   logging event link-status
-   no switchport
-   ip address 10.245.2.49/31
 !
 interface Ethernet2
-   description UPLINK spine2:Et1
-   logging event link-status
-   no switchport
-   ip address 10.245.3.49/31
 !
 interface Ethernet3
 !
@@ -43,11 +35,6 @@ interface Ethernet5
 interface Ethernet6
 !
 interface Ethernet7
-   description SIDELINK-leaf2:Et7
-   mtu 9214
-   logging event link-status
-   speed forced 40gfull
-   switchport mode trunk
 !
 interface Ethernet8
 !

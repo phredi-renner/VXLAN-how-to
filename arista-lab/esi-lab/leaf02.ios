@@ -1,17 +1,17 @@
 ! Command: show running-config
-! device: leaf01 (vEOS-lab, EOS-4.28.0F)
+! device: leaf02 (vEOS-lab, EOS-4.28.0F)
 !
 ! boot system flash:/vEOS-lab.swi
 !
 no aaa root
 !
-username admin privilege 15 role network-admin secret sha512 $6$gar16Tu8VAHPpqnu$uzdyojYOOWfe8VZknjHiaZVhCpQranILZ53cYOj/kBap8XCqMterINDYT1ROozwnr4JZSXcqg3OGi/NQ.j6w60
+username admin privilege 15 role network-admin secret sha512 $6$ACdNnJEL0zQ4qdVt$mOb98FlU.xGLQBHMN22vmCeO14VYB56LTJEcGG61fscD.wFXQtKM58X0lNUXmYXPAnBl5rSo.au2NjtvAfmch/
 !
 transceiver qsfp default-mode 4x10G
 !
 service routing protocols model multi-agent
 !
-hostname leaf01
+hostname leaf02
 !
 snmp-server community g00se ro
 snmp-server vrf mgmt
@@ -25,21 +25,50 @@ vlan 40
 vlan 4092
    name MLAG-iBGP
 !
+vrf instance gold_vrf
+!
 vrf instance mgmt
 !
 aaa authorization exec default local
 !
+interface Port-Channel10
+   description DOWNLINK_ESI_TO_AS1
+   switchport mode trunk
+   !
+   evpn ethernet-segment
+      identifier 0001:0001:0001:0001:0001
+      route-target import 00:00:00:00:00:01
+   lacp system-id 0000.0000.0001
+!
+interface Port-Channel11
+   description DOWNLINK_ESI_TO_AS2
+   switchport mode trunk
+   !
+   evpn ethernet-segment
+      identifier 0002:0002:0002:0002:0002
+      route-target import 00:00:00:00:00:02
+   lacp system-id 0000.0000.0002
+!
+interface Port-Channel13
+   description DOWNLINK_ESI_TO_AS3
+   switchport mode trunk
+   !
+   evpn ethernet-segment
+      identifier 0003:0003:0003:0003:0003
+      route-target import 00:00:00:00:00:03
+   lacp system-id 0000.0000.0003
+!
 interface Ethernet1
-   description UPLINK spine1:Et1
+   description UPLINK spine1:Et2
    logging event link-status
    no switchport
-   ip address 10.245.2.49/31
+   ip address 10.245.2.51/31
 !
 interface Ethernet2
-   description UPLINK spine2:Et1
+   description UPLINK spine2:Et2
    logging event link-status
    no switchport
-   ip address 10.245.3.49/31
+   ip address 10.245.3.51/31
 !
 interface Ethernet3
 !
@@ -47,21 +76,24 @@ interface Ethernet4
    switchport access vlan 40
 !
 interface Ethernet5
+   description DOWNLINK_TO_AS2:E2
+   channel-group 11 mode active
 !
 interface Ethernet6
+   description DOWNLINK_TO_AS1:E1
+   channel-group 10 mode active
 !
 interface Ethernet7
-   description SIDELINK-leaf2:Et7
+   description DOWNLINK_TO_AS3
    mtu 9214
-   logging event link-status
-   speed forced 40gfull
    switchport mode trunk
+   channel-group 13 mode active
 !
 interface Ethernet8
 !
 interface Loopback0
    description Underlay eBGP
-   ip address 10.245.0.25/32
+   ip address 10.245.0.26/32
 !
 interface Loopback1
    description VTEP Source
@@ -70,21 +102,27 @@ interface Loopback1
 interface Management1
    description oob-mgmt
    vrf mgmt
-   ip address 192.168.1.71/24
+   ip address 192.168.1.72/24
+!
+interface Vlan40
+   vrf gold_vrf
+   ip address virtual 40.40.40.1/24
 !
 interface Vlan4092
    description IBGP Peering
    mtu 9214
-   ip address 10.255.255.0/31
+   ip address 10.255.255.1/31
 !
 interface Vxlan1
    vxlan source-interface Loopback1
    vxlan udp-port 4789
    vxlan vlan 40 vni 100040
+   vxlan vrf gold_vrf vni 100001
 !
 ip virtual-router mac-address 00:1c:aa:aa:aa:aa
 !
 ip routing
+ip routing vrf gold_vrf
 no ip routing vrf mgmt
 !
 ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
@@ -104,7 +142,7 @@ route-map REDIST-CONN-IPV4 permit 30
    match ip address prefix-list UNDERLAY-P2P-IPV4
 !
 router bgp 64535
-   router-id 10.245.0.25
+   router-id 10.245.0.26
    update wait-install
    no bgp default ipv4-unicast
    distance bgp 20 200 200
@@ -133,13 +171,13 @@ router bgp 64535
    neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
    neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
    neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
-   neighbor 10.245.2.48 peer group EBGP-UNDERLAY-IPV4
-   neighbor 10.245.3.48 peer group EBGP-UNDERLAY-IPV4
-   neighbor 10.255.255.1 peer group IBGP-MLAG-UNDERLAY-IPV4
+   neighbor 10.245.2.50 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.245.3.50 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.255.255.0 peer group IBGP-MLAG-UNDERLAY-IPV4
    redistribute connected route-map REDIST-CONN-IPV4
    !
    vlan 40
-      rd 10.245.0.25:40
+      rd 10.245.0.26:40
       route-target both 40:40
       redistribute learned
    !
@@ -149,5 +187,11 @@ router bgp 64535
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
       neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
+   !
+   vrf gold_vrf
+      rd 10.245.0.26:40
+      route-target import evpn 40:40
+      route-target export evpn 40:40
+      redistribute connected
 !
 end

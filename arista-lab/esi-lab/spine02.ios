@@ -1,44 +1,53 @@
 ! Command: show running-config
-! device: leaf01 (vEOS-lab, EOS-4.28.0F)
+! device: spine2 (vEOS-lab, EOS-4.28.0F)
 !
 ! boot system flash:/vEOS-lab.swi
 !
 no aaa root
 !
-username admin privilege 15 role network-admin secret sha512 $6$gar16Tu8VAHPpqnu$uzdyojYOOWfe8VZknjHiaZVhCpQranILZ53cYOj/kBap8XCqMterINDYT1ROozwnr4JZSXcqg3OGi/NQ.j6w60
+username admin privilege 15 role netowrk-admin secret sha512 $6$6ppuaZuV1dCabH4U$RAdd2isZDdOantXJbnPdHgQPM7kI2IQb0vFgYPQkfLMKEQm4F1wPlTIYMCB/f0YFKQLK0IOEFIiYjg/uvm.JY0
+!
+ip dhcp relay information option
 !
 transceiver qsfp default-mode 4x10G
 !
 service routing protocols model multi-agent
 !
-hostname leaf01
+hostname spine2
 !
 snmp-server community g00se ro
 snmp-server vrf mgmt
 !
-spanning-tree mode mstp
-no spanning-tree vlan-id 4092
+spanning-tree mode rapid-pvst
 !
-vlan 4092
-   name MLAG-iBGP
+clock timezone US/Pacific
+!
+no vlan 1
+!
+vlan 4094
+   name Default
 !
 vrf instance mgmt
 !
 aaa authorization exec default local
 !
 interface Ethernet1
-   description UPLINK spine1:Et1
+   description DOWNLINK-leaf1:Et2
    logging event link-status
    no switchport
-   ip address 10.245.2.49/31
+   ip address 10.245.3.48/31
 !
 interface Ethernet2
-   description UPLINK spine2:Et1
+   description DOWNLINK-leaf2:Et2
    logging event link-status
    no switchport
-   ip address 10.245.3.49/31
+   ip address 10.245.3.50/31
 !
 interface Ethernet3
+   description DOWNLINK-leaf3:Et2
+   logging event link-status
+   no switchport
+   ip address 10.245.3.56/31
 !
 interface Ethernet4
 !
@@ -47,33 +56,23 @@ interface Ethernet5
 interface Ethernet6
 !
 interface Ethernet7
-   description SIDELINK-leaf2:Et7
-   mtu 9214
-   logging event link-status
-   speed forced 40gfull
-   switchport mode trunk
 !
 interface Ethernet8
 !
 interface Loopback0
-   description Underlay eBGP
-   ip address 10.245.0.25/32
+   description RID
+   ip address 10.245.0.6/32
 !
 interface Management1
    description oob-mgmt
    vrf mgmt
-   ip address 192.168.1.71/24
+   ip address 192.168.1.75/24
 !
-interface Vlan4092
-   description IBGP Peering
-   mtu 9214
-   ip address 10.255.255.0/31
-!
-ip virtual-router mac-address 00:1c:aa:aa:aa:aa
 !
 ip routing
 no ip routing vrf mgmt
 !
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
 ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
 ip prefix-list UNDERLAY-P2P-IPV4 seq 10 permit 10.245.2.0/24 le 31
 ip prefix-list UNDERLAY-P2P-IPV4 seq 20 permit 10.245.3.0/24 le 31
@@ -86,42 +85,35 @@ route-map REDIST-CONN-IPV4 permit 10
 route-map REDIST-CONN-IPV4 permit 20
    match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
 !
-route-map REDIST-CONN-IPV4 permit 30
+route-map REDIST-CONN-IPV4 permit 32
    match ip address prefix-list UNDERLAY-P2P-IPV4
 !
-router bgp 64535
-   router-id 10.245.0.25
-   update wait-install
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+!
+router bgp 64512
+   router-id 10.245.0.6
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    graceful-restart restart-time 300
    maximum-paths 2 ecmp 2
+   bgp listen range 10.245.2.32/31 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.3.0/24 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.0.0/24 peer-group EVPN-OVERLAY-IPV4 peer-filter LEAF-AS
    neighbor EBGP-UNDERLAY-IPV4 peer group
-   neighbor EBGP-UNDERLAY-IPV4 remote-as 64512
+   neighbor EBGP-UNDERLAY-IPV4 bfd
    neighbor EBGP-UNDERLAY-IPV4 graceful-restart
    neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
    neighbor EBGP-UNDERLAY-IPV4 send-community
-   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 0
    neighbor EVPN-OVERLAY-IPV4 peer group
-   neighbor EVPN-OVERLAY-IPV4 remote-as 64512
+   neighbor EVPN-OVERLAY-IPV4 next-hop-unchanged
    neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 bfd
    neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
-   neighbor EVPN-OVERLAY-IPV4 graceful-restart
    neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
    neighbor EVPN-OVERLAY-IPV4 send-community
-   neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 peer group
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 remote-as 64535
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 next-hop-self
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 allowas-in 1
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 graceful-restart
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 send-community
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
-   neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
-   neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
-   neighbor 10.245.2.48 peer group EBGP-UNDERLAY-IPV4
-   neighbor 10.245.3.48 peer group EBGP-UNDERLAY-IPV4
-   neighbor 10.255.255.1 peer group IBGP-MLAG-UNDERLAY-IPV4
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 0
    redistribute connected route-map REDIST-CONN-IPV4
    !
    address-family evpn
@@ -129,6 +121,5 @@ router bgp 64535
    !
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
-      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
 !
 end

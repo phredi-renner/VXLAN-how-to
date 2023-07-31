@@ -9,7 +9,7 @@ username admin privilege 15 role network-admin secret sha512 $6$UExy8LIzPcH4g5M0
 !
 transceiver qsfp default-mode 4x10G
 !
-service routing protocols model ribd
+service routing protocols model multi-agent
 !
 hostname leaf03
 !
@@ -23,16 +23,8 @@ vrf instance mgmt
 aaa authorization exec default local
 !
 interface Ethernet1
-   description UPLINK spine1:Et3
-   logging event link-status
-   no switchport
-   ip address 10.245.2.57/31
 !
 interface Ethernet2
-   description UPLINK spine2:Et3
-   logging event link-status
-   no switchport
-   ip address 10.245.3.57/31
 !
 interface Ethernet3
 !
@@ -45,10 +37,6 @@ interface Ethernet6
 interface Ethernet7
 !
 interface Ethernet8
-!
-interface Loopback0
-   description Underlay eBGP
-   ip address 10.245.0.29/32
 !
 interface Management1
    description oob-mgmt

@@ -1,45 +1,43 @@
 ! Command: show running-config
-! device: leaf02 (vEOS-lab, EOS-4.28.0F)
+! device: leaf03 (vEOS-lab, EOS-4.28.0F)
 !
 ! boot system flash:/vEOS-lab.swi
 !
 no aaa root
 !
-username admin privilege 15 role network-admin secret sha512 $6$ACdNnJEL0zQ4qdVt$mOb98FlU.xGLQBHMN22vmCeO14VYB56LTJEcGG61fscD.wFXQtKM58X0lNUXmYXPAnBl5rSo.au2NjtvAfmch/
+username admin privilege 15 role network-admin secret sha512 $6$UExy8LIzPcH4g5M0$EuYk8rwTM9nQCSksZgyxZsFspWtZB/ArVy9Bl1LFOzrzPHtQjLjeaNn5Cda6hHimw6cM.ZX8DELgADfXeDJZt0
 !
 transceiver qsfp default-mode 4x10G
 !
 service routing protocols model multi-agent
 !
-hostname leaf02
+hostname leaf03
 !
 snmp-server community g00se ro
 snmp-server vrf mgmt
 !
 spanning-tree mode mstp
-no spanning-tree vlan-id 4092
 !
 vlan 40
    name test-l2-vlan
 !
-vlan 4092
-   name MLAG-iBGP
+vrf instance gold_vrf
 !
 vrf instance mgmt
 !
 aaa authorization exec default local
 !
 interface Ethernet1
-   description UPLINK spine1:Et2
+   description UPLINK spine1:Et3
    logging event link-status
    no switchport
-   ip address 10.245.2.51/31
+   ip address 10.245.2.57/31
 !
 interface Ethernet2
-   description UPLINK spine2:Et2
+   description UPLINK spine2:Et3
    logging event link-status
    no switchport
-   ip address 10.245.3.51/31
+   ip address 10.245.3.57/31
 !
 interface Ethernet3
 !
@@ -51,38 +49,34 @@ interface Ethernet5
 interface Ethernet6
 !
 interface Ethernet7
-   description SIDELINK-leaf02:Et
-   mtu 9214
-   switchport mode trunk
 !
 interface Ethernet8
 !
 interface Loopback0
    description Underlay eBGP
-   ip address 10.245.0.26/32
+   ip address 10.245.0.29/32
 !
 interface Loopback1
    description VTEP Source
-   ip address 10.245.1.25/32
+   ip address 10.245.1.29/32
 !
 interface Management1
    description oob-mgmt
    vrf mgmt
-   ip address 192.168.1.72/24
+   ip address 192.168.1.73/24
 !
-interface Vlan4092
-   description IBGP Peering
-   mtu 9214
-   ip address 10.255.255.1/31
+interface Vlan40
+   vrf gold_vrf
+   ip address virtual 40.40.40.1/24
 !
 interface Vxlan1
    vxlan source-interface Loopback1
    vxlan udp-port 4789
    vxlan vlan 40 vni 100040
-!
-ip virtual-router mac-address 00:1c:aa:aa:aa:aa
+   vxlan vrf gold_vrf vni 100001
 !
 ip routing
+ip routing vrf gold_vrf
 no ip routing vrf mgmt
 !
 ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
@@ -101,9 +95,8 @@ route-map REDIST-CONN-IPV4 permit 20
 route-map REDIST-CONN-IPV4 permit 30
    match ip address prefix-list UNDERLAY-P2P-IPV4
 !
-router bgp 64535
-   router-id 10.245.0.26
-   update wait-install
+router bgp 64539
+   router-id 10.245.0.29
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    graceful-restart restart-time 300
@@ -122,22 +115,14 @@ router bgp 64535
    neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
    neighbor EVPN-OVERLAY-IPV4 send-community
    neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 peer group
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 remote-as 64535
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 next-hop-self
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 allowas-in 1
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 graceful-restart
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 send-community
-   neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
    neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
    neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
-   neighbor 10.245.2.50 peer group EBGP-UNDERLAY-IPV4
-   neighbor 10.245.3.50 peer group EBGP-UNDERLAY-IPV4
-   neighbor 10.255.255.0 peer group IBGP-MLAG-UNDERLAY-IPV4
+   neighbor 10.245.2.56 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.245.3.56 peer group EBGP-UNDERLAY-IPV4
    redistribute connected route-map REDIST-CONN-IPV4
    !
    vlan 40
-      rd 10.245.0.26:40
+      rd 10.245.0.29:40
       route-target both 40:40
       redistribute learned
    !
@@ -146,6 +131,11 @@ router bgp 64535
    !
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
-      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
+   !
+   vrf gold_vrf
+      rd 10.245.0.29:40
+      route-target import evpn 40:40
+      route-target export evpn 40:40
+      redistribute connected
 !
 end
