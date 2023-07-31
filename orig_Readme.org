@@ -31,11 +31,10 @@ _*Leaf*_: A layer 3 switch that participates in the underlay and overlay network
 ![vxlan lab diagram](readme_content/diagram.png)
 
 * Configuration - Underlay
-The underlay provides basic connectivity and routing between the physical network devices and requires IP addressing and routing to provide this. As outlined in the diagram there are layer 3 point to point links between the leafs and spines. For our lab purposes we are foxusing on the leaf configureation, the spines are already configured.
-
-** Configure Point-To-Point Link Addresses
+The underlay provides basic connectivity and routing between the physical network devices and requires IP addressing and routing to provide this. As outlined in the diagram there are layer 3 point to point links between the leafs and spines. In some cases we may have a leaf pair in one location with a link between them, this will be a layer 2 trunk.
+** Configure Point-to-point link addresses
 #+begin_src
-Leaf01
+hostname leaf01
 !
 interface Ethernet1
    description UPLINK spine1:Et1
@@ -48,9 +47,17 @@ interface Ethernet2
    logging event link-status
    no switchport
    ip address 10.245.3.49/31
+!
+!
+interface Ethernet7
+   description SIDELINK-leaf2:Et7
+   mtu 9214
+   logging event link-status
+   switchport mode trunk
 #+end_src
+
 #+begin_src
-Leaf02
+hostname leaf02
 !
 interface Ethernet1
    description UPLINK spine1:Et2
@@ -63,9 +70,17 @@ interface Ethernet2
    logging event link-status
    no switchport
    ip address 10.245.3.51/31
+!
+!
+interface Ethernet7
+   description SIDELINK-leaf02:Et
+   mtu 9214
+   logging event link-status
+   switchport mode trunk
 #+end_src
+
 #+begin_src
-Leaf03
+hostname leaf03
 !
 interface Ethernet1
    description UPLINK spine1:Et3
@@ -80,62 +95,82 @@ interface Ethernet2
    ip address 10.245.3.57/31
 #+end_src
 
-** Configure Loopback Addresses for BGP Peering
+*** here I need to add the Spine addressing, but functionally it is simlar to what's on the Leafs.
+
+** Configure Loopback addresses for BGP peering
 #+begin_src
-Leaf01
+leaf01
 !
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.25/32
 #+end_src
+
 #+begin_src
-Leaf02
+leaf02
 !
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.26/32
 #+end_src
+
 #+begin_src
-Leaf03
+leaf03
 !
 interface Loopback0
    description Underlay eBGP
    ip address 10.245.0.29/32
 #+end_src
 
+** For the interconnected leafs we need to create a layer three SVI to later be used for iBGP peering
+
+#+begin_src
+leaf01
+!
+vlan 4092
+   name MLAG-iBGP
+
+interface Vlan4092
+   description IBGP Peering
+   mtu 9214
+   ip address 10.255.255.0/31
+#+end_src
+
+#+begin_src
+leaf02
+!
+vlan 4092
+   name MLAG-iBGP
+
+interface Vlan4092
+   description IBGP Peering
+   mtu 9214
+   ip address 10.255.255.1/31
+#+end_src
+
 ** At this point you should be able to ping across each of the links to the directly connected neighbor
 
 * Configure Underlay Routing Process
 ** Basic BGP
-We will assign a BGP process for each pair, spines and leafs. these will be eBGP relationships with each leaf (or leaf pair) or spine (spine pair) having it's own AS number. The leafs will later use this for the overlay as well. The basic is similar on all nodes whether leaf or spine. This is what will advertise the loopback addresses and make them reachable from other devices.
-
-First there's some basic, generic configuraiton.
+We will assign a BGP process for eeach pair, spines and leafs. these will be eBGP relationships with each leaf (or leaf pair) or spine (spine pair) having it's own AS number. The leafs will later use this for the overlay as well. The basic is similar on all nodes whether leaf or spine.
 
 #+begin_src
-Leaf01
+spine01
+!
+router bgp 64512
+   router-id 10.245.0.5
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+#+end_src
+
+#+begin_src
+leaf01
 !
 router bgp 64535
    router-id 10.245.0.25
-   no bgp default ipv4-unicast
-   distance bgp 20 200 200
-   graceful-restart restart-time 300
-   maximum-paths 2 ecmp 2
-#+end_src
-#+begin_src
-Leaf02
-!
-router bgp 64536
-   router-id 10.245.0.26
-   no bgp default ipv4-unicast
-   distance bgp 20 200 200
-   graceful-restart restart-time 300
-   maximum-paths 2 ecmp 2
-#+end_src
-#+begin_src
-Leaf03
-!
-router bgp 64539
-   router-id 10.245.0.29
+   update wait-install
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    graceful-restart restart-time 300
@@ -143,17 +178,74 @@ router bgp 64539
 #+end_src
 
 ** Underlay eBGP Neighbors
+Each spine will peer with each leaf over the L3 p-t-p interface. By using the /listen/ command on the spines we can dynamically create the BGP peering on this side. We set a range of addresses to listen for and assign them to a peer group whic then allows us to assign similar configuration parameters to all of the dynamically learned neighbors as long as they match a filter of known leaf ASNs..
+
 On the leafs we use a peer-group called *EBGP-UNDERLAY-IPV4* for repeat configuration parameters that will be applied to both spine adjecencies. On the spines we use a similary named peer group that the dynamically learned neighbors are added to.
 Each spine will peer with each leaf over the L3 p-t-p interface. By using the /listen/ command on the spines we can dynamically create the BGP peering on that side. We set a range of addresses to listen for and assign them to a peer group which then allows us to assign similar configuration parameters to all of the dynamically learned neighbors as long as they match a filter of known leaf ASNs. Note for the spine configuration below there is no *neighbor* statement.
 
 On the leafs we use a peer-group called *EBGP-UNDERLAY-IPV4* for repeat configuration parameters that will be applied to both spine adjecencies. On the spines we use a similary named peer group that the dynamically learned neighbors are added to.
 
-In addition to the basics we create peering across the point-to-pint links and activate the ipv4 address family. Most of the configuration is the same on all leafs, with the only differences being the BGP ASN, router-id and peer address to match with the point-to-point links.
 #+begin_src
-Leaf01
+# spine1
+
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+
+router bgp 65000
+   router-id 10.245.0.5
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   bgp listen range 10.245.2.0/24 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.3.32/31 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 bfd
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
 !
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+
+#+end_src
+
+#+begin_src
+# spine2
+
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+
+router bgp 65000
+   router-id 10.245.0.6
+   update wait-install
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart restart-time 300
+   maximum-paths 2 ecmp 2
+   bgp listen range 10.245.2.0/24 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   bgp listen range 10.245.3.32/31 peer-group EBGP-UNDERLAY-IPV4 peer-filter LEAF-AS
+   neighbor EBGP-UNDERLAY-IPV4 peer group
+   neighbor EBGP-UNDERLAY-IPV4 bfd
+   neighbor EBGP-UNDERLAY-IPV4 graceful-restart
+   neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
+   neighbor EBGP-UNDERLAY-IPV4 send-community
+   neighbor EBGP-UNDERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
+!
+   address-family ipv4
+      neighbor EBGP-UNDERLAY-IPV4 activate
+#+end_src
+
+#+begin_src
+leaf01
+
 router bgp 64535
    router-id 10.245.0.25
+   update wait-install
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    graceful-restart restart-time 300
@@ -164,18 +256,29 @@ router bgp 64535
    neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
    neighbor EBGP-UNDERLAY-IPV4 send-community
    neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 peer group
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 remote-as 64535
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 next-hop-self
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 allowas-in 1
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 graceful-restart
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 send-community
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
    neighbor 10.245.2.48 peer group EBGP-UNDERLAY-IPV4
    neighbor 10.245.3.48 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.255.255.1 peer group IBGP-MLAG-UNDERLAY-IPV4
    redistribute connected route-map REDIST-CONN-IPV4
-   !
+!
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
-#+end_src
+      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
+   #+end_src
+
 #+begin_src
-Leaf02
+leaf02
 !
-router bgp 64536
+router bgp 64535
    router-id 10.245.0.26
+   update wait-install
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    graceful-restart restart-time 300
@@ -186,18 +289,29 @@ router bgp 64536
    neighbor EBGP-UNDERLAY-IPV4 password 7 YJzOEZJg+RZNENCoPvARl52sBjFfAn6Q
    neighbor EBGP-UNDERLAY-IPV4 send-community
    neighbor EBGP-UNDERLAY-IPV4 maximum-routes 100000 warning-only
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 peer group
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 remote-as 64535
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 next-hop-self
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 allowas-in 1
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 graceful-restart
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 send-community
+   neighbor IBGP-MLAG-UNDERLAY-IPV4 maximum-routes 100000 warning-only
    neighbor 10.245.2.50 peer group EBGP-UNDERLAY-IPV4
    neighbor 10.245.3.50 peer group EBGP-UNDERLAY-IPV4
+   neighbor 10.255.255.0 peer group IBGP-MLAG-UNDERLAY-IPV4
    redistribute connected route-map REDIST-CONN-IPV4
-   !
+!
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
+      neighbor IBGP-MLAG-UNDERLAY-IPV4 activate
 #+end_src
+
 #+begin_src
-Leaf03
+leaf03
 !
 router bgp 64539
    router-id 10.245.0.29
+   update wait-install
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    graceful-restart restart-time 300
@@ -211,14 +325,12 @@ router bgp 64539
    neighbor 10.245.2.56 peer group EBGP-UNDERLAY-IPV4
    neighbor 10.245.3.56 peer group EBGP-UNDERLAY-IPV4
    redistribute connected route-map REDIST-CONN-IPV4
-   !
+!
    address-family ipv4
       neighbor EBGP-UNDERLAY-IPV4 activate
 #+end_src
 
-
-
-*** Access Lists - same applies on all devices
+For both iBGP and eBGP neighbors we are redistributing all connected Loopbacks and point-to-point links. These are controlled with the REDIST-CONN-IPV4 route-map. Due to standardization we can use the same prefix-list and route-map on both spine and leaf.
 #+begin_src
 ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
 ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
@@ -233,28 +345,54 @@ route-map REDIST-CONN-IPV4 permit 20
 !
 route-map REDIST-CONN-IPV4 permit 30
    match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
 #+end_src
 
 ** At this point the Underlay network should be functional
-- Each spine should have three BGP neighbors, one to each leaf.  Each leaf should show each spine as a neighbor. For example:
+- Each spine should have three BGP neighbors, one to each leaf. Leafs 1 and 2 should also have three neighbors that include each spine and it's pair leaf. Leaf 3 should show each spine as a neighbor.
+
 #+begin_src
-spine1#sh bgp summ
-BGP summary information for VRF default
-Router identifier 10.245.0.5, local AS number 64512
-Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
------------ ----------- ------------- ----------------------- -------------- ---------- ----------
-10.245.2.49       64535 Established   IPv4 Unicast            Negotiated              4          4
-10.245.2.51       64536 Established   IPv4 Unicast            Negotiated              4          4
-10.245.2.57       64539 Established   IPv4 Unicast            Negotiated              4          4
 spine1#sh ip bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.5, local AS number 64512
 Neighbor Status Codes: m - Under maintenance
   Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
-  10.245.2.49 4 64535            239       238    0    0 03:14:14 Estab   4      4
-  10.245.2.51 4 64536             95        92    0    0 01:11:06 Estab   4      4
-  10.245.2.57 4 64539             76        75    0    0 00:58:29 Estab   4      4
+  10.245.2.49 4 64535             87       106    0    0 01:25:45 Estab   0      0
+  10.245.2.51 4 64535             88       107    0    0 01:26:02 Estab   0      0
+  10.245.2.57 4 64539             79        93    0    0 01:15:06 Estab   0      0
 spine1#
+spine1#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+----------- ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.2.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.57       64539 Established   IPv4 Unicast            Negotiated              3          3
+spine1#
+#+end_src
+
+#+begin_src
+spine2#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.3.49 4 64535             88       107    0    0 01:26:20 Estab   0      0
+  10.245.3.51 4 64535             88       108    0    0 01:26:37 Estab   0      0
+  10.245.3.57 4 64539             79        93    0    0 01:15:42 Estab   0      0
+spine2#
+spine2#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.6, local AS number 64512
+Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+----------- ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.3.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.57       64539 Established   IPv4 Unicast            Negotiated              3          3
+spine2#
 #+end_src
 
 #+begin_src
@@ -262,18 +400,67 @@ leaf01#sh ip bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.25, local AS number 64535
 Neighbor Status Codes: m - Under maintenance
-  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
-  10.245.2.48 4 64512            235       236    0    0 03:11:45 Estab   10     10
-  10.245.3.48 4 64512            236       239    0    0 03:11:45 Estab   10     10
+  Neighbor         V  AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.48      4  64512             20        15    0    0 00:13:07 Estab   4      4
+  10.245.3.48      4  64512             20        15    0    0 00:13:05 Estab   4      4
+  10.255.255.1     4  64535             12        12    0    0 00:10:42 Estab   0      0
 leaf01#
-leaf01#sh bgp summ
+#+end_src
+
+#+begin_src
+leaf02#sh ip bgp summ
 BGP summary information for VRF default
-Router identifier 10.245.0.25, local AS number 64535
-Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
------------ ----------- ------------- ----------------------- -------------- ---------- ----------
-10.245.2.48       64512 Established   IPv4 Unicast            Negotiated             10         10
-10.245.3.48       64512 Established   IPv4 Unicast            Negotiated             10         10
-leaf01#
+Router identifier 10.245.0.26, local AS number 64535
+Neighbor Status Codes: m - Under maintenance
+  Neighbor         V  AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.50      4  64512            109        89    0    0 01:27:55 Estab   4      4
+  10.245.3.50      4  64512            109        89    0    0 01:27:53 Estab   4      4
+  10.255.255.0     4  64535             87        87    0    0 01:25:13 Estab   0      0
+leaf02#
+#+end_src
+
+#+begin_src
+leaf03#sh ip bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.29, local AS number 64539
+Neighbor Status Codes: m - Under maintenance
+  Neighbor         V  AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.2.56      4  64512             96        81    0    0 01:17:25 Estab   4      4
+  10.245.3.56      4  64512             95        81    0    0 01:17:25 Estab   4      4
+leaf03#
+#+end_src
+
+Additionally, we should see things in the routing table, for example:
+#+begin_src
+leaf02#sh ip route
+
+VRF: default
+Codes: C - connected, S - static, K - kernel,
+       O - OSPF, IA - OSPF inter area, E1 - OSPF external type 1,
+       E2 - OSPF external type 2, N1 - OSPF NSSA external type 1,
+       N2 - OSPF NSSA external type2, B - Other BGP Routes,
+       B I - iBGP, B E - eBGP, R - RIP, I L1 - IS-IS level 1,
+       I L2 - IS-IS level 2, O3 - OSPFv3, A B - BGP Aggregate,
+       A O - OSPF Summary, NG - Nexthop Group Static Route,
+       V - VXLAN Control Service, M - Martian,
+       DH - DHCP client installed default route,
+       DP - Dynamic Policy Route, L - VRF Leaked,
+       G  - gRIBI, RC - Route Cache Route
+
+Gateway of last resort is not set
+
+ B E      10.245.0.5/32 [20/0] via 10.245.2.50, Ethernet1
+ B E      10.245.0.6/32 [20/0] via 10.245.3.50, Ethernet2
+ C        10.245.0.26/32 is directly connected, Loopback0
+ B E      10.245.2.48/31 [20/0] via 10.245.2.50, Ethernet1
+ C        10.245.2.50/31 is directly connected, Ethernet1
+ B E      10.245.2.56/31 [20/0] via 10.245.2.50, Ethernet1
+ B E      10.245.3.48/31 [20/0] via 10.245.3.50, Ethernet2
+ C        10.245.3.50/31 is directly connected, Ethernet2
+ B E      10.245.3.56/31 [20/0] via 10.245.3.50, Ethernet2
+ C        10.255.255.0/31 is directly connected, Vlan4092
+
+leaf02#
 #+end_src
 
 * Configure the EVPN Overlay
@@ -282,13 +469,14 @@ The command:
 #+begin_src
 service routing protocols model multi-agent
 #+end_src
-Enables EVPN capability and will require a reboot of the switch to take effect. This would be a command to enter when first gettign started.
+Enables EVPN capability and will require a reboot of the switch to take effect. This might be a command to enter when first gettign started.
 
 Some models of switch will require VXLAN routing to be enabled in the tcam profile:
 #+begin_src
 hardware tcam profile vxlan-routing
 #+end_src
-** Configure the BGP EVPN Overlay
+
+** Configure BGP EVPN Overlay - Leaf-to-Spine
 Here we are creating a BGP peering between the Spine and Leaf
 
 On each Leaf, configure a peer group with:
@@ -296,11 +484,11 @@ On each Leaf, configure a peer group with:
 - Neighbor to the Loopback IP address of each Spine using the Loopback0 interface as the source
 - Configure ebgp-multihop 3 to account for possibility of a Leaf needing to establish an EVPN BGP adjacency with a Spine through it’s peer link, this is in the case where there are two leafs with an MLAG between them
 - The send-community extended command is required for attributes to be sent between EVPN peers
-- Activate the evpn address-family for the appropriate peer-group
-#+begin_src
-Leaf01
-!
-router bgp 64535
+- Activate the evpn peer-group
+
+  #+begin_src
+leaf1 and leaf2
+  router bgp 64535
    neighbor EVPN-OVERLAY-IPV4 peer group
    neighbor EVPN-OVERLAY-IPV4 remote-as 64512
    neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
@@ -311,14 +499,13 @@ router bgp 64535
    neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
    neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
    neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
-   !
+
    address-family evpn
       neighbor EVPN-OVERLAY-IPV4 activate
 #+end_src
-#+begin_src
-Leaf02
-!
-router bgp 64536
+  #+begin_src
+leaf3
+  router bgp 64539
    neighbor EVPN-OVERLAY-IPV4 peer group
    neighbor EVPN-OVERLAY-IPV4 remote-as 64512
    neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
@@ -329,109 +516,158 @@ router bgp 64536
    neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
    neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
    neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
-   !
+
    address-family evpn
       neighbor EVPN-OVERLAY-IPV4 activate
 #+end_src
+
+** Configure BGP EVPN Overlay - Spine-to_Leaf
+On each Spine, configure a peer group with:
+
+- Neighbor to the Loopback IP address of each Leaf using the Loopback0 interface as the source
+- Configure ebgp-multihop 3 to account for possibility of a Leaf needing to establish an EVPN BGP adjacency with a Spine through it’s peer link
+- The send-community extended command is required for attributes to be sent between EVPN peers
+- By default, an eBGP speaker changes the next hop to itself when sending learned routes to eBGP neighbors. This is normal behavior used in most networks to ensure a recursion of routes, such as in the Underlay fabric. However, in the EVPN Overlay fabric, route recursion is possible without having to change the next-hop (e.g. leafs already know how to get to each other in the Underlay). Optimal routing tables can be achieved by setting next-hop-unchanged on the Spines facing the Leaf peers
+- Activate the evpn peer-group
+
+Normal BGP configuration each neighbor is explicilty defined, as with the Underlay, we utilize the "bgp listen range" command do dynamically create BGP peering relationships. This is filtered based on known loopback address ranges and ASNs that we use on the leafs.
+
 #+begin_src
-Leaf03
+spine01
 !
-router bgp 64539
+ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
+!
+route-map REDIST-CONN-IPV4 permit 10
+   match ip address prefix-list OVERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 20
+   match ip address prefix-list UNDERLAY-LOOPBACKS-IPV4
+!
+route-map REDIST-CONN-IPV4 permit 30
+   match ip address prefix-list UNDERLAY-P2P-IPV4
+!
+peer-filter LEAF-AS
+   10 match as-range 64513-65535 result accept
+!
+router bgp 64512
+   router-id 10.245.0.5
+   bgp listen range 10.245.0.0/24 peer-group EVPN-OVERLAY-IPV4 peer-filter LEAF-AS
    neighbor EVPN-OVERLAY-IPV4 peer group
-   neighbor EVPN-OVERLAY-IPV4 remote-as 64512
+   neighbor EVPN-OVERLAY-IPV4 next-hop-unchanged
    neighbor EVPN-OVERLAY-IPV4 update-source Loopback0
+   neighbor EVPN-OVERLAY-IPV4 bfd
    neighbor EVPN-OVERLAY-IPV4 ebgp-multihop 3
-   neighbor EVPN-OVERLAY-IPV4 graceful-restart
    neighbor EVPN-OVERLAY-IPV4 password 7 5CCCJRiTkuVwWgNB+hJm51l2uVbPlPYj
    neighbor EVPN-OVERLAY-IPV4 send-community
-   neighbor EVPN-OVERLAY-IPV4 maximum-routes 100000 warning-only
-   neighbor 10.245.0.5 peer group EVPN-OVERLAY-IPV4
-   neighbor 10.245.0.6 peer group EVPN-OVERLAY-IPV4
-   !
-   address-family evpn
-      neighbor EVPN-OVERLAY-IPV4 activate
+   neighbor EVPN-OVERLAY-IPV4 maximum-routes 0
+   redistribute connected route-map REDIST-CONN-IPV4
 #+end_src
 
 ** Validate EVPN Neighbors
 At this point the EVP neighbors should be estabished between the Leafs and Spines, so we are now ready to transport VXLAN traffic.
 
-From the perspective of the spines we should have EVPN BGP peering with ech of the leafs:
+From the perspective of the Spines we should have EVPN peering with each of the Leafs
 #+begin_src
+spine1#show bgp evpn summary
+BGP summary information for VRF default
+Router identifier 10.245.0.5, local AS number 64512
+Neighbor Status Codes: m - Under maintenance
+  Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
+  10.245.0.25 4 64535           5372      5372    0    0    3d04h Estab   9      9
+  10.245.0.26 4 64535           5376      5400    0    0    3d04h Estab   9      9
+  10.245.0.29 4 64539           5397      5394    0    0    3d04h Estab   10     10
+spine1#
 spine1#sh bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.5, local AS number 64512
 Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
 ----------- ----------- ------------- ----------------------- -------------- ---------- ----------
-10.245.0.25       64535 Established   L2VPN EVPN              Negotiated              1          1
-10.245.0.26       64536 Established   L2VPN EVPN              Negotiated              1          1
-10.245.0.29       64539 Established   L2VPN EVPN              Negotiated              1          1
-10.245.2.49       64535 Established   IPv4 Unicast            Negotiated              4          4
-10.245.2.51       64536 Established   IPv4 Unicast            Negotiated              4          4
-10.245.2.57       64539 Established   IPv4 Unicast            Negotiated              4          4
+10.245.0.25       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.26       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.29       64539 Established   L2VPN EVPN              Negotiated              0          0
+10.245.2.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.2.57       64539 Established   IPv4 Unicast            Negotiated              3          3
 spine1#
-spine1#sh bgp evpn summ
+
+spine2#sh bgp evpn summary
 BGP summary information for VRF default
-Router identifier 10.245.0.5, local AS number 64512
+Router identifier 10.245.0.6, local AS number 64512
 Neighbor Status Codes: m - Under maintenance
   Neighbor    V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
-  10.245.0.25 4 64535            260       257    0    0 03:23:30 Estab   1      1
-  10.245.0.26 4 64536            106       105    0    0 01:20:19 Estab   1      1
-  10.245.0.29 4 64539             85        85    0    0 01:07:08 Estab   1      1
-spine1#
-#+end_src
-
-From the perspective of the leaf, there should be peering with each spine:
-#+begin_src
-leaf01#sh bgp summ
+  10.245.0.25 4 64535           5377      5398    0    0    3d04h Estab   9      9
+  10.245.0.26 4 64535           5369      5388    0    0    3d04h Estab   9      9
+  10.245.0.29 4 64539           5390      5409    0    0    3d04h Estab   10     10
+spine2#
+spine2#sh bgp summ
 BGP summary information for VRF default
-Router identifier 10.245.0.25, local AS number 64535
+Router identifier 10.245.0.6, local AS number 64512
 Neighbor             AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
 ----------- ----------- ------------- ----------------------- -------------- ---------- ----------
-10.245.0.5        64512 Established   L2VPN EVPN              Negotiated              2          2
-10.245.0.6        64512 Established   L2VPN EVPN              Negotiated              2          2
-10.245.2.48       64512 Established   IPv4 Unicast            Negotiated             10         10
-10.245.3.48       64512 Established   IPv4 Unicast            Negotiated             10         10
-leaf01#sh bgp evpn summ
+10.245.0.25       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.26       64535 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.29       64539 Established   L2VPN EVPN              Negotiated              0          0
+10.245.3.49       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.51       64535 Established   IPv4 Unicast            Negotiated              3          3
+10.245.3.57       64539 Established   IPv4 Unicast            Negotiated              3          3
+spine2#
+#+end_src
+
+And from the perspective of the Leafs we should see peering with each of the Spines.
+#+begin_src
+leaf1-LAB#sh bgp evpn summ
 BGP summary information for VRF default
 Router identifier 10.245.0.25, local AS number 64535
 Neighbor Status Codes: m - Under maintenance
   Neighbor   V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc
-  10.245.0.5 4 64512            259       263    0    0 03:25:27 Estab   2      2
-  10.245.0.6 4 64512            256       265    0    0 03:25:27 Estab   2      2
+  10.245.0.5 4 64512           5374      5374    0    0    3d04h Estab   10     10
+  10.245.0.6 4 64512           5398      5377    0    0    3d04h Estab   10     10
+leaf1-LAB#
+leaf01#
+leaf01#sh bgp summ
+BGP summary information for VRF default
+Router identifier 10.245.0.25, local AS number 64535
+Neighbor              AS Session State AFI/SAFI                AFI/SAFI State   NLRI Rcd   NLRI Acc
+------------ ----------- ------------- ----------------------- -------------- ---------- ----------
+10.245.0.5         64512 Established   L2VPN EVPN              Negotiated              0          0
+10.245.0.6         64512 Established   L2VPN EVPN              Negotiated              0          0
+10.245.2.48        64512 Established   IPv4 Unicast            Negotiated              6          6
+10.245.3.48        64512 Established   IPv4 Unicast            Negotiated              6          6
 leaf01#
 #+end_src
 
-* Configure VXLAN Tunnel Endpoints (VTEP) on the Leafs
+* Configure VXLAN Tunnel Endpoints (VTEP) - This happpens only on the leafs
 The VTEP is the tunnel interface that encapsulate/decapsulate and deliver L2 traffic over the L3 network between leafs in the EVPN fabric.
 - Configure a loopback interfce and IP that will be shared among the VTEP leaf pairs
 - Advertise the Loopback into BGP
 - Configure the VTEP interface
 
-** Configure Loopback 1 - The VTEP Source
+** Configure Loopback1
 #+begin_src
-Leaf01
+leaf01
 !
 interface Loopback1
    description VTEP Source
    ip address 10.245.1.25/32
 #+end_src
+
 #+begin_src
-Leaf02
+leaf02
 !
 interface Loopback1
    description VTEP Source
    ip address 10.245.1.26/32
 #+end_src
+
 #+begin_src
-Leaf03
+leaf03
 !
 interface Loopback1
    description VTEP Source
    ip address 10.245.1.29/32
 #+end_src
-
-** Advertise the loopback into BGP
-- This uses the prefix-list and route-map we saw earlier
+** Advertise into BGP
+- this uses the route-map we saw earlier
 #+begin_src
 ip prefix-list OVERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.1.0/24 eq 32
 ip prefix-list UNDERLAY-LOOPBACKS-IPV4 seq 10 permit 10.245.0.0/24 eq 32
@@ -447,8 +683,7 @@ route-map REDIST-CONN-IPV4 permit 20
 route-map REDIST-CONN-IPV4 permit 30
    match ip address prefix-list UNDERLAY-P2P-IPV4
 #+end_src
-
-** Create the VTEP (Vxlan1) Interface
+** Configure the VTEP interface
 - We use the just created Loopback 1 as the source and define the port. At this point we have not yet tied any traffic to use the tunnel.
 #+begin_src
 interface Vxlan1
@@ -457,93 +692,70 @@ interface Vxlan1
 #+end_src
 
 * Transport L2 VXLAN with EVPN
+
 ** To pass traffic we need to map our L2 VLAN to a VXLAN Network Identifier (VNI) which is uniquely used on each leaf we want the same vlan to appear.
 *** Create the VLAN
 *** Assign the VLAN a VNI within the vxlan interface
 *** Apply BGP route distinguishers and route-targets
 *** Redistribute learned MAC addresses into the overlay so they are seen at other leafs
-*** Configure an access port for an end host to use the VLAN
-
-** Create VLAN, add it to the VTEP and apply routing
 #+begin_src
-Leaf01
+leaf01
 !
 vlan 40
-   name test-l2-vlan
+ name test-l2-vxlan
 !
-interface Vxlan1
-   vxlan vlan 40 vni 100040
-!
+int vxlan1
+ vxlan vlan 40 vni 100040
+
 router bgp 64535
    vlan 40
-      rd 10.245.0.25:40
-      route-target both 40:40
-      redistribute learned
-!
-interface Ethernet4
-   switchport access vlan 40
-#+end_src
-#+begin_src
-Leaf02
-!
-vlan 40
-   name test-l2-vlan
-!
-interface Vxlan1
-   vxlan vlan 40 vni 100040
-!
-router bgp 64536
-   vlan 40
-      rd 10.245.0.26:40
-      route-target both 40:40
-      redistribute learned
-!
-interface Ethernet4
-   switchport access vlan 40
-#+end_src
-#+begin_src
-Leaf03
-!
-vlan 40
-   name test-l2-vlan
-!
-interface Vxlan1
-   vxlan vlan 40 vni 100040
-!
-router bgp 64539
-   vlan 40
-      rd 10.245.0.29:40
-      route-target both 40:40
-      redistribute learned
-!
-interface Ethernet4
-   switchport access vlan 40
+   rd 10.245.0.25:40
+   route-target both evpn 40:40
+   redistribute learned
 #+end_src
 
-* Validate for L2 Traffic
+#+begin_src
+leaf02
+!
+vlan 40
+ name test-l2-vxlan
+!
+int vxlan1
+ vxlan vlan 40 vni 100040
+
+router bgp 64535
+   vlan 40
+   rd 10.245.0.26:40
+   route-target both evpn 40:40
+   redistribute learned
+#+end_src
+
+#+begin_src
+leaf03
+!
+vlan 40
+ name test-l2-vxlan
+!
+int vxlan1
+ vxlan vlan 40 vni 100040
+
+router bgp 64539
+   vlan 40
+   rd 10.245.0.29:40
+   route-target both evpn 40:40
+   redistribute learned
+#+end_src
+
+* Validation that this works and is transporting L2 VXLAN traffic (mac addresses)
+
 ** A few helpful commands to validate operations
+
 - “show interface vxlan1” for a quick glance at the VTEP
 - “show vxlan vtep” will show remote vteps
 - “show vxlan address-table” will show MACs learned via VXLAN
 - “show bgp evpn route-type mac-ip” will show the Type-2 EVPN routes, which are the MAC addresses transported over the IP fabric as L2 VXLAN packets
 
-We can add some IP addresses to the end hosts to show that we have L2 connectivity.
-#+begin_src
-VPC401
-ip 40.40.40.10 255.255.255.0 40.40.40.1
-#+end_src
-#+begin_src
-VPC402
-ip 40.40.40.20 255.255.255.0 40.40.40.1
-#+end_src
-#+begin_src
-VPC403
-ip 40.40.40.30 255.255.255.0 40.40.40.1
-#+end_src
-
-But first let's look at the switches and see the mac addresses because that's really what we are enabling.
-
-#+begin_src
+  #+begin_src
 leaf01#sh int vxlan1
 Vxlan1 is up, line protocol is up (connected)
   Hardware is Vxlan
@@ -557,27 +769,42 @@ Vxlan1 is up, line protocol is up (connected)
         Use 'show vxlan vni' for details.
   Static VRF to VNI mapping is not configured
   Headend replication flood vtep list is:
-    40 10.245.1.26     10.245.1.29
+    40 10.245.1.29
   Shared Router MAC is 0000.0000.0000
+leaf01#
 leaf01#sh vxlan vtep
 Remote VTEPS for Vxlan1:
 
 VTEP              Tunnel Type(s)
 ----------------- --------------
-10.245.1.26       unicast, flood
 10.245.1.29       unicast, flood
 
-Total number of remote VTEPS:  2
+Total number of remote VTEPS:  1
 leaf01#sh vxlan address-table
           Vxlan Mac Address Table
 ----------------------------------------------------------------------
 
 VLAN  Mac Address     Type      Prt  VTEP             Moves   Last Move
 ----  -----------     ----      ---  ----             -----   ---------
-  40  0050.7966.6808  EVPN      Vx1  10.245.1.29      1       0:00:36 ago
-  40  0050.7966.680c  EVPN      Vx1  10.245.1.26      1       0:00:26 ago
-Total Remote Mac Addresses for this criterion: 2
-leaf01#sh bgp evpn route-type mac-ip
+  40  0050.7966.6808  EVPN      Vx1  10.245.1.29      1       0:01:32 ago
+Total Remote Mac Addresses for this criterion: 1
+leaf01#sh mac address-table vlan 40
+          Mac Address Table
+------------------------------------------------------------------
+
+Vlan    Mac Address       Type        Ports      Moves   Last Move
+----    -----------       ----        -----      -----   ---------
+  40    0050.7966.6806    DYNAMIC     Et4        1       0:02:13 ago
+  40    0050.7966.6808    DYNAMIC     Vx1        1       0:01:54 ago
+Total Mac Addresses for this criterion: 2
+
+          Multicast Mac Address Table
+------------------------------------------------------------------
+
+Vlan    Mac Address       Type        Ports
+----    -----------       ----        -----
+Total Mac Addresses for this criterion: 0
+leaf01#show bgp evpn route-type mac-ip
 BGP routing table information for VRF default
 Router identifier 10.245.0.25, local AS number 64535
 Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
@@ -592,20 +819,35 @@ AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Li
                                  10.245.1.29           -       100     0       64512 64539 i
  *  ec    RD: 10.245.0.29:40 mac-ip 0050.7966.6808
                                  10.245.1.29           -       100     0       64512 64539 i
- * >Ec    RD: 10.245.0.26:40 mac-ip 0050.7966.680c
-                                 10.245.1.26           -       100     0       64512 64536 i
- *  ec    RD: 10.245.0.26:40 mac-ip 0050.7966.680c
-                                 10.245.1.26           -       100     0       64512 64536 i
-leaf01#sh mac address-table
+leaf01#
+#+end_src
+
+#+begin_src
+leaf02#sh vxlan vtep
+Remote VTEPS for Vxlan1:
+
+VTEP              Tunnel Type(s)
+----------------- --------------
+10.245.1.29       unicast, flood
+
+Total number of remote VTEPS:  1
+leaf02#show vxlan address-table
+          Vxlan Mac Address Table
+----------------------------------------------------------------------
+
+VLAN  Mac Address     Type      Prt  VTEP             Moves   Last Move
+----  -----------     ----      ---  ----             -----   ---------
+  40  0050.7966.6808  EVPN      Vx1  10.245.1.29      3       0:02:28 ago
+Total Remote Mac Addresses for this criterion: 1
+leaf02#sh mac address-table vlan 40
           Mac Address Table
 ------------------------------------------------------------------
 
 Vlan    Mac Address       Type        Ports      Moves   Last Move
 ----    -----------       ----        -----      -----   ---------
-  40    0050.7966.6806    DYNAMIC     Et4        1       0:00:44 ago
-  40    0050.7966.6808    DYNAMIC     Vx1        1       0:00:57 ago
-  40    0050.7966.680c    DYNAMIC     Vx1        1       0:00:47 ago
-Total Mac Addresses for this criterion: 3
+  40    0050.7966.6806    DYNAMIC     Et7        1       0:04:08 ago
+  40    0050.7966.6808    DYNAMIC     Vx1        3       0:02:41 ago
+Total Mac Addresses for this criterion: 2
 
           Multicast Mac Address Table
 ------------------------------------------------------------------
@@ -613,71 +855,51 @@ Total Mac Addresses for this criterion: 3
 Vlan    Mac Address       Type        Ports
 ----    -----------       ----        -----
 Total Mac Addresses for this criterion: 0
-leaf01#
-#+end_src
-#+begin_src
-leaf02#sh int vxlan1
-Vxlan1 is up, line protocol is up (connected)
-  Hardware is Vxlan
-  Source interface is Loopback1 and is active with 10.245.1.26
-  Replication/Flood Mode is headend with Flood List Source: EVPN
-  Remote MAC learning via EVPN
-  VNI mapping to VLANs
-  Static VLAN to VNI mapping is
-    [40, 100040]
-  Note: All Dynamic VLANs used by VCS are internal VLANs.
-        Use 'show vxlan vni' for details.
-  Static VRF to VNI mapping is not configured
-  Headend replication flood vtep list is:
-    40 10.245.1.25     10.245.1.29
-  Shared Router MAC is 0000.0000.0000
-leaf02#sh vxlan vtep
-Remote VTEPS for Vxlan1:
-
-VTEP              Tunnel Type(s)
------------------ --------------
-10.245.1.25       unicast, flood
-10.245.1.29       unicast, flood
-
-Total number of remote VTEPS:  2
-leaf02#sh vxlan address-table
-          Vxlan Mac Address Table
-----------------------------------------------------------------------
-
-VLAN  Mac Address     Type      Prt  VTEP             Moves   Last Move
-----  -----------     ----      ---  ----             -----   ---------
-  40  0050.7966.6806  EVPN      Vx1  10.245.1.25      1       0:02:02 ago
-  40  0050.7966.6808  EVPN      Vx1  10.245.1.29      1       0:02:16 ago
-Total Remote Mac Addresses for this criterion: 2
 leaf02#sh bgp evpn route-type mac-ip
 BGP routing table information for VRF default
-Router identifier 10.245.0.26, local AS number 64536
+Router identifier 10.245.0.26, local AS number 64535
 Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
                     c - Contributing to ECMP, % - Pending BGP convergence
 Origin codes: i - IGP, e - EGP, ? - incomplete
 AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Link Local Nexthop
 
           Network                Next Hop              Metric  LocPref Weight  Path
- * >Ec    RD: 10.245.0.25:40 mac-ip 0050.7966.6806
-                                 10.245.1.25           -       100     0       64512 64535 i
- *  ec    RD: 10.245.0.25:40 mac-ip 0050.7966.6806
-                                 10.245.1.25           -       100     0       64512 64535 i
+ * >      RD: 10.245.0.26:40 mac-ip 0050.7966.6806
+                                 -                     -       -       0       i
  * >Ec    RD: 10.245.0.29:40 mac-ip 0050.7966.6808
                                  10.245.1.29           -       100     0       64512 64539 i
  *  ec    RD: 10.245.0.29:40 mac-ip 0050.7966.6808
                                  10.245.1.29           -       100     0       64512 64539 i
- * >      RD: 10.245.0.26:40 mac-ip 0050.7966.680c
-                                 -                     -       -       0       i
-leaf02#sh mac address-table
+leaf02#
+#+end_src
+
+#+begin_src
+leaf03#sh vxlan vtep
+Remote VTEPS for Vxlan1:
+
+VTEP              Tunnel Type(s)
+----------------- --------------
+10.245.1.25       flood, unicast
+
+Total number of remote VTEPS:  1
+leaf03#show vxlan address-table
+          Vxlan Mac Address Table
+----------------------------------------------------------------------
+
+VLAN  Mac Address     Type      Prt  VTEP             Moves   Last Move
+----  -----------     ----      ---  ----             -----   ---------
+  40  0050.7966.6806  EVPN      Vx1  10.245.1.25      1       0:00:20 ago
+  40  0050.7966.6808  EVPN      Vx1  10.245.1.25      6       0:00:57 ago
+Total Remote Mac Addresses for this criterion: 2
+leaf03#show mac address-table vlan 40
           Mac Address Table
 ------------------------------------------------------------------
 
 Vlan    Mac Address       Type        Ports      Moves   Last Move
 ----    -----------       ----        -----      -----   ---------
-  40    0050.7966.6806    DYNAMIC     Vx1        1       0:02:14 ago
-  40    0050.7966.6808    DYNAMIC     Vx1        1       0:02:28 ago
-  40    0050.7966.680c    DYNAMIC     Et4        1       0:02:18 ago
-Total Mac Addresses for this criterion: 3
+  40    0050.7966.6806    DYNAMIC     Vx1        1       0:00:27 ago
+  40    0050.7966.6808    DYNAMIC     Vx1        6       0:01:04 ago
+Total Mac Addresses for this criterion: 2
 
           Multicast Mac Address Table
 ------------------------------------------------------------------
@@ -685,42 +907,6 @@ Total Mac Addresses for this criterion: 3
 Vlan    Mac Address       Type        Ports
 ----    -----------       ----        -----
 Total Mac Addresses for this criterion: 0
-leaf02#
-#+end_src
-#+begin_src
-leaf03#sh int vxlan1
-Vxlan1 is up, line protocol is up (connected)
-  Hardware is Vxlan
-  Source interface is Loopback1 and is active with 10.245.1.29
-  Replication/Flood Mode is headend with Flood List Source: EVPN
-  Remote MAC learning via EVPN
-  VNI mapping to VLANs
-  Static VLAN to VNI mapping is
-    [40, 100040]
-  Note: All Dynamic VLANs used by VCS are internal VLANs.
-        Use 'show vxlan vni' for details.
-  Static VRF to VNI mapping is not configured
-  Headend replication flood vtep list is:
-    40 10.245.1.25     10.245.1.26
-  Shared Router MAC is 0000.0000.0000
-leaf03#sh vxlan vtep
-Remote VTEPS for Vxlan1:
-
-VTEP              Tunnel Type(s)
------------------ --------------
-10.245.1.25       flood, unicast
-10.245.1.26       flood, unicast
-
-Total number of remote VTEPS:  2
-leaf03#sh vxlan address-table
-          Vxlan Mac Address Table
-----------------------------------------------------------------------
-
-VLAN  Mac Address     Type      Prt  VTEP             Moves   Last Move
-----  -----------     ----      ---  ----             -----   ---------
-  40  0050.7966.6806  EVPN      Vx1  10.245.1.25      1       0:03:22 ago
-  40  0050.7966.680c  EVPN      Vx1  10.245.1.26      1       0:03:25 ago
-Total Remote Mac Addresses for this criterion: 2
 leaf03#sh bgp evpn route-type mac-ip
 BGP routing table information for VRF default
 Router identifier 10.245.0.29, local AS number 64539
@@ -734,29 +920,14 @@ AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Li
                                  10.245.1.25           -       100     0       64512 64535 i
  *  ec    RD: 10.245.0.25:40 mac-ip 0050.7966.6806
                                  10.245.1.25           -       100     0       64512 64535 i
- * >      RD: 10.245.0.29:40 mac-ip 0050.7966.6808
-                                 -                     -       -       0       i
- * >Ec    RD: 10.245.0.26:40 mac-ip 0050.7966.680c
-                                 10.245.1.26           -       100     0       64512 64536 i
- *  ec    RD: 10.245.0.26:40 mac-ip 0050.7966.680c
-                                 10.245.1.26           -       100     0       64512 64536 i
-leaf03#sh mac address-table
-          Mac Address Table
-------------------------------------------------------------------
-
-Vlan    Mac Address       Type        Ports      Moves   Last Move
-----    -----------       ----        -----      -----   ---------
-  40    0050.7966.6806    DYNAMIC     Vx1        1       0:03:33 ago
-  40    0050.7966.6808    DYNAMIC     Et4        1       0:03:47 ago
-  40    0050.7966.680c    DYNAMIC     Vx1        1       0:03:37 ago
-Total Mac Addresses for this criterion: 3
-
-          Multicast Mac Address Table
-------------------------------------------------------------------
-
-Vlan    Mac Address       Type        Ports
-----    -----------       ----        -----
-Total Mac Addresses for this criterion: 0
+ * >Ec    RD: 10.245.0.26:40 mac-ip 0050.7966.6806
+                                 10.245.1.25           -       100     0       64512 64535 i
+ *  ec    RD: 10.245.0.26:40 mac-ip 0050.7966.6806
+                                 10.245.1.25           -       100     0       64512 64535 i
+ * >Ec    RD: 10.245.0.26:40 mac-ip 0050.7966.6808
+                                 10.245.1.25           -       100     0       64512 64535 i
+ *  ec    RD: 10.245.0.26:40 mac-ip 0050.7966.6808
+                                 10.245.1.25           -       100     0       64512 64535 i
 leaf03#
 #+end_src
 
@@ -764,25 +935,22 @@ leaf03#
 In this example, we will isolate traffic into a VRF and transport that VRF over the EVPN network virtualization overlay using EVPN Type-5 routes. Rather than having VRFs peerings configured all over the place, we only need to configure the VRFs and the fabric will handle the isolation for us without countless numbers of BGP peerings. This funciton is transparent to the Spines and only configured on the Leafs we want the network to appear.
 
 - Configure a VRF (I named it “gold_vrf”)
-- Enable routing for the VRF
 - Configure a VLAN SVI and add it to the vrf
 - Map the VRF to a VNI (I used 100001)
 - Configure the VRF under BGP
 
 #+begin_src
-Leaf01
-!
 vrf instance gold_vrf
-!
+
 ip routing vrf gold_vrf
-!
+
 interface Vlan40
  vrf gold_vrf
  ip address virtual 40.40.40.1/24
-!
+
 interface vxlan1
   vxlan vrf gold_vrf vni 100001
-!
+
 router bgp 64535
  vrf gold_vrf
     rd 10.245.0.25:40
@@ -790,41 +958,39 @@ router bgp 64535
     route-target export evpn 40:40
  redistribute connected
 #+end_src
+
 #+begin_src
-Leaf02
-!
 vrf instance gold_vrf
-!
+
 ip routing vrf gold_vrf
-!
+
 interface Vlan40
  vrf gold_vrf
  ip address virtual 40.40.40.1/24
-!
+
 interface vxlan1
   vxlan vrf gold_vrf vni 100001
-!
-router bgp 64536
+
+router bgp 64535
  vrf gold_vrf
     rd 10.245.0.26:40
     route-target import evpn 40:40
     route-target export evpn 40:40
     redistribute connected
 #+end_src
+
 #+begin_src
-Leaf03
-!
 vrf instance gold_vrf
-!
+
 ip routing vrf gold_vrf
-!
+
 interface Vlan40
  vrf gold_vrf
  ip address virtual 40.40.40.1/24
-!
+
 interface vxlan1
   vxlan vrf gold_vrf vni 100001
-!
+
 router bgp 64539
  vrf gold_vrf
     rd 10.245.0.29:40
@@ -833,26 +999,7 @@ router bgp 64539
     redistribute connected
 #+end_src
 
-* Validation that this works and is transporting L3 VXLAN traffic (ipv4 addresses)
-To make it interesting we will add a second, non-VXLAN interface to Leaf01
-
-#+begin_src
-Leaf01
-!
-vlan 50
-   name test-l3-vlan
-!
-interface Vlan50
- vrf gold_vrf
- ip address 50.50.50.1/24
-!
-int e3
-switchport access vlan 50
-#+end_src
-#+begin_src
-VPC50
-ip 50.50.50.10 255.255.255.0 50.50.50.1
-#+end_src
+* Validation that this works and is transporting L3 VXLAN traffic (pv4 addresses)
 
 ** Some helpful commands
 - “show vxlan vtep” will show remote vteps
@@ -867,11 +1014,10 @@ Remote VTEPS for Vxlan1:
 
 VTEP              Tunnel Type(s)
 ----------------- --------------
-10.245.1.26       unicast, flood
 10.245.1.29       unicast, flood
 
-Total number of remote VTEPS:  2
-leaf01#sh bgp evpn route-type ip-prefix ipv4
+Total number of remote VTEPS:  1
+leaf01#show bgp evpn route-type ip-prefix ipv4
 BGP routing table information for VRF default
 Router identifier 10.245.0.25, local AS number 64535
 Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
@@ -882,16 +1028,10 @@ AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Li
           Network                Next Hop              Metric  LocPref Weight  Path
  * >      RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
                                  -                     -       -       0       i
- * >Ec    RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
-                                 10.245.1.26           -       100     0       64512 64536 i
- *  ec    RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
-                                 10.245.1.26           -       100     0       64512 64536 i
  * >Ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
                                  10.245.1.29           -       100     0       64512 64539 i
  *  ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
                                  10.245.1.29           -       100     0       64512 64539 i
- * >      RD: 10.245.0.25:40 ip-prefix 50.50.50.0/24
-                                 -                     -       -       0       i
 leaf01#sh ip route vrf gold_vrf
 
 VRF: gold_vrf
@@ -909,46 +1049,44 @@ Codes: C - connected, S - static, K - kernel,
 
 Gateway of last resort is not set
 
- B E      40.40.40.20/32 [20/0] via VTEP 10.245.1.26 VNI 100001 router-mac 50:00:00:cb:38:c2 local-interface Vxlan1
- B E      40.40.40.30/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ B E      40.40.40.43/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ B E      40.40.40.45/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
  C        40.40.40.0/24 is directly connected, Vlan40
- C        50.50.50.0/24 is directly connected, Vlan50
 
 leaf01#
+leaf01#sh ip arp vrf gold_vrf
+Address         Age (sec)  Hardware Addr   Interface
+40.40.40.41       0:12:05  0050.7966.6806  Vlan40, Ethernet4
+40.40.40.43             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.45             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.46       0:16:42  0050.7966.6808  Vlan40, Vxlan1
+leaf01#
 #+end_src
+
 #+begin_src
 leaf02#sh vxlan vtep
 Remote VTEPS for Vxlan1:
 
 VTEP              Tunnel Type(s)
 ----------------- --------------
-10.245.1.25       unicast, flood
 10.245.1.29       unicast, flood
 
-Total number of remote VTEPS:  2
-leaf02#sh bgp evpn route-type ip-prefix ipv4
+Total number of remote VTEPS:  1
+leaf02#show bgp evpn route-type ip-prefix ipv4
 BGP routing table information for VRF default
-Router identifier 10.245.0.26, local AS number 64536
+Router identifier 10.245.0.26, local AS number 64535
 Route status codes: * - valid, > - active, S - Stale, E - ECMP head, e - ECMP
                     c - Contributing to ECMP, % - Pending BGP convergence
 Origin codes: i - IGP, e - EGP, ? - incomplete
 AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Link Local Nexthop
 
           Network                Next Hop              Metric  LocPref Weight  Path
- * >Ec    RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
-                                 10.245.1.25           -       100     0       64512 64535 i
- *  ec    RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
-                                 10.245.1.25           -       100     0       64512 64535 i
  * >      RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
                                  -                     -       -       0       i
  * >Ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
                                  10.245.1.29           -       100     0       64512 64539 i
  *  ec    RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
                                  10.245.1.29           -       100     0       64512 64539 i
- * >Ec    RD: 10.245.0.25:40 ip-prefix 50.50.50.0/24
-                                 10.245.1.25           -       100     0       64512 64535 i
- *  ec    RD: 10.245.0.25:40 ip-prefix 50.50.50.0/24
-                                 10.245.1.25           -       100     0       64512 64535 i
 leaf02#sh ip route vrf gold_vrf
 
 VRF: gold_vrf
@@ -966,11 +1104,20 @@ Codes: C - connected, S - static, K - kernel,
 
 Gateway of last resort is not set
 
+ B E      40.40.40.43/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
+ B E      40.40.40.45/32 [20/0] via VTEP 10.245.1.29 VNI 100001 router-mac 50:00:00:d5:5d:c0 local-interface Vxlan1
  C        40.40.40.0/24 is directly connected, Vlan40
- B E      50.50.50.0/24 [20/0] via VTEP 10.245.1.25 VNI 100001 router-mac 50:00:00:d7:ee:0b local-interface Vxlan1
 
 leaf02#
+leaf02#sh ip arp vrf gold_vrf
+Address         Age (sec)  Hardware Addr   Interface
+40.40.40.41       0:11:41  0050.7966.6806  Vlan40, Ethernet7
+40.40.40.43             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.45             -  0050.7966.6808  Vlan40, Vxlan1
+40.40.40.46       0:16:18  0050.7966.6808  Vlan40, Vxlan1
+leaf02#
 #+end_src
+
 #+begin_src
 leaf03#sh vxlan vtep
 Remote VTEPS for Vxlan1:
@@ -978,9 +1125,8 @@ Remote VTEPS for Vxlan1:
 VTEP              Tunnel Type(s)
 ----------------- --------------
 10.245.1.25       flood, unicast
-10.245.1.26       flood, unicast
 
-Total number of remote VTEPS:  2
+Total number of remote VTEPS:  1
 leaf03#sh bgp evpn route-type ip-prefix ipv4
 BGP routing table information for VRF default
 Router identifier 10.245.0.29, local AS number 64539
@@ -995,16 +1141,12 @@ AS Path Attributes: Or-ID - Originator ID, C-LST - Cluster List, LL Nexthop - Li
  *  ec    RD: 10.245.0.25:40 ip-prefix 40.40.40.0/24
                                  10.245.1.25           -       100     0       64512 64535 i
  * >Ec    RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
-                                 10.245.1.26           -       100     0       64512 64536 i
+                                 10.245.1.25           -       100     0       64512 64535 i
  *  ec    RD: 10.245.0.26:40 ip-prefix 40.40.40.0/24
-                                 10.245.1.26           -       100     0       64512 64536 i
+                                 10.245.1.25           -       100     0       64512 64535 i
  * >      RD: 10.245.0.29:40 ip-prefix 40.40.40.0/24
                                  -                     -       -       0       i
- * >Ec    RD: 10.245.0.25:40 ip-prefix 50.50.50.0/24
-                                 10.245.1.25           -       100     0       64512 64535 i
- *  ec    RD: 10.245.0.25:40 ip-prefix 50.50.50.0/24
-                                 10.245.1.25           -       100     0       64512 64535 i
-leaf03#sh ip route vrf gold_vrf
+leaf03#show ip route vrf gold_vrf
 
 VRF: gold_vrf
 Codes: C - connected, S - static, K - kernel,
@@ -1021,8 +1163,55 @@ Codes: C - connected, S - static, K - kernel,
 
 Gateway of last resort is not set
 
+ B E      40.40.40.41/32 [20/0] via VTEP 10.245.1.25 VNI 100001 router-mac 50:00:00:d7:ee:0b local-interface Vxlan1
+                                via VTEP 10.245.1.25 VNI 100001 router-mac 50:00:00:cb:38:c2 local-interface Vxlan1
  C        40.40.40.0/24 is directly connected, Vlan40
- B E      50.50.50.0/24 [20/0] via VTEP 10.245.1.25 VNI 100001 router-mac 50:00:00:d7:ee:0b local-interface Vxlan1
 
 leaf03#
+leaf03#sh ip arp vrf gold_vrf
+Address         Age (sec)  Hardware Addr   Interface
+40.40.40.41             -  0050.7966.6806  Vlan40, Vxlan1
+40.40.40.43       0:11:48  0050.7966.6808  Vlan40, Ethernet4
+40.40.40.45       0:19:00  0050.7966.6808  Vlan40, Ethernet4
+leaf03#
 #+end_src
+*** And the real test is if there's reachability from end point to end point
+#+begin_src
+VPCS> show
+
+NAME   IP/MASK              GATEWAY                             GATEWAY
+VPCS1  40.40.40.41/24       40.40.40.1
+       fe80::250:79ff:fe66:6806/64
+
+VPCS>
+VPCS> ping 40.40.40.43
+
+84 bytes from 40.40.40.43 icmp_seq=1 ttl=64 time=29.168 ms
+84 bytes from 40.40.40.43 icmp_seq=2 ttl=64 time=21.503 ms
+84 bytes from 40.40.40.43 icmp_seq=3 ttl=64 time=24.575 ms
+84 bytes from 40.40.40.43 icmp_seq=4 ttl=64 time=24.917 ms
+84 bytes from 40.40.40.43 icmp_seq=5 ttl=64 time=23.577 ms
+
+VPCS>
+#+end_src
+
+#+begin_src
+VPCS> show
+
+NAME   IP/MASK              GATEWAY                             GATEWAY
+VPCS1  40.40.40.43/24       40.40.40.1
+       fe80::250:79ff:fe66:6808/64
+
+VPCS>
+VPCS> ping 40.40.40.41
+
+84 bytes from 40.40.40.41 icmp_seq=1 ttl=64 time=58.359 ms
+84 bytes from 40.40.40.41 icmp_seq=2 ttl=64 time=26.050 ms
+84 bytes from 40.40.40.41 icmp_seq=3 ttl=64 time=18.370 ms
+84 bytes from 40.40.40.41 icmp_seq=4 ttl=64 time=23.212 ms
+84 bytes from 40.40.40.41 icmp_seq=5 ttl=64 time=22.259 ms
+
+VPCS>
+#+end_src
+
+* Wahoo, it works!
