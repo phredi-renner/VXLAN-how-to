@@ -29,6 +29,7 @@ _*Leaf*_: A layer 3 switch that participates in the underlay and overlay network
 * Here's the layout
 
 ![vxlan lab diagram](readme_content/diagram.png)
+<img width="807" alt="image" src="https://github.com/phredi-renner/VXLAN-how-to/readme_content/diagram.png" />
 
 * Configuration - Underlay
 The underlay provides basic connectivity and routing between the physical network devices and requires IP addressing and routing to provide this. As outlined in the diagram there are layer 3 point to point links between the leafs and spines. For our lab purposes we are foxusing on the leaf configureation, the spines are already configured.
