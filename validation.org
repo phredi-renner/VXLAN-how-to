@@ -3,6 +3,7 @@
 * Underlay
 
 ** Spine 1
+#+begin_src
 spine1#sh ip bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.5, local AS number 64512
@@ -36,7 +37,9 @@ Gateway of last resort is not set
  C        10.245.2.56/31 is directly connected, Ethernet3
 
 spine1#
+#+end_src
 ** Spine2
+#+begin_src
 spine2#sh ip bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.6, local AS number 64512
@@ -70,8 +73,9 @@ Gateway of last resort is not set
  C        10.245.3.56/31 is directly connected, Ethernet3
 
 spine2#
-
+#+end_src
 ** Leaf1
+#+begin_src
 leaf01#sh ip bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.25, local AS number 64535
@@ -111,8 +115,9 @@ Gateway of last resort is not set
  C        10.255.255.0/31 is directly connected, Vlan4092
 
 leaf01#
-
+#+end_src
 ** Leaf2
+#+begin_src
 leaf02#wr mem
 Copy completed successfully.
 leaf02#sh ip bgp summ
@@ -152,8 +157,9 @@ Gateway of last resort is not set
  C        10.255.255.0/31 is directly connected, Vlan4092
 
 leaf02#
-
+#+end_src
 ** Leaf3
+#+begin_src
 leaf03#sh ip bgp summ
 BGP summary information for VRF default
 Router identifier 10.245.0.29, local AS number 64539
@@ -189,10 +195,12 @@ Gateway of last resort is not set
  C        10.245.3.56/31 is directly connected, Ethernet2
 
 leaf03#
+#+end_src
 * Overlay
 
 ** Each Spine will have EVPN peers with each leaf
 ** Spine 1
+#+begin_src
 spine1#sh bgp evpn summ
 BGP summary information for VRF default
 Router identifier 10.245.0.5, local AS number 64512
@@ -202,7 +210,9 @@ Neighbor Status Codes: m - Under maintenance
   10.245.0.26 4 64535              6         6    0    0 00:02:28 Estab   0      0
   10.245.0.29 4 64539              6         6    0    0 00:02:26 Estab   0      0
 spine1#
+#+end_src
 ** Spine2
+#+begin_src
 spine2#sh bgp evpn summ
 BGP summary information for VRF default
 Router identifier 10.245.0.6, local AS number 64512
@@ -212,9 +222,10 @@ Neighbor Status Codes: m - Under maintenance
   10.245.0.26 4 64535              8         7    0    0 00:03:35 Estab   0      0
   10.245.0.29 4 64539              8         7    0    0 00:03:31 Estab   0      0
 spine2#
-
+#+end_src
 ** Each leaf will have evpn peers with each Spine
 ** Leaf1
+#+begin_src
 leaf01#sh bgp evpn summ
 BGP summary information for VRF default
 Router identifier 10.245.0.25, local AS number 64535
@@ -223,9 +234,10 @@ Neighbor Status Codes: m - Under maintenance
   10.245.0.5 4 64512              4         4    0    0 00:00:43 Estab   0      0
   10.245.0.6 4 64512              4         4    0    0 00:00:43 Estab   0      0
 leaf01#
-
+#+end_src
 ============================
 ** pc41
+#+begin_src
 VPCS> ping 40.40.40.43
 
 84 bytes from 40.40.40.43 icmp_seq=1 ttl=64 time=29.168 ms
@@ -241,8 +253,9 @@ VPCS1  40.40.40.41/24       40.40.40.1
        fe80::250:79ff:fe66:6806/64
 
 VPCS>
-
+#+end_src
 ** PC43
+#+begin_src
 VPCS> ping 40.40.40.41
 
 84 bytes from 40.40.40.41 icmp_seq=1 ttl=64 time=58.359 ms
@@ -258,8 +271,9 @@ VPCS1  40.40.40.43/24       40.40.40.1
        fe80::250:79ff:fe66:6808/64
 
 VPCS>
-
+#+end_src
 ** leaf01
+#+begin_src
 leaf01#sh vxlan vtep
 Remote VTEPS for Vxlan1:
 
@@ -312,8 +326,9 @@ Address         Age (sec)  Hardware Addr   Interface
 40.40.40.45             -  0050.7966.6808  Vlan40, Vxlan1
 40.40.40.46       0:16:42  0050.7966.6808  Vlan40, Vxlan1
 leaf01#
-
+#+end_src
 ** leaf02
+#+begin_src
 leaf02#sh vxlan vtep
 Remote VTEPS for Vxlan1:
 
@@ -366,8 +381,9 @@ Address         Age (sec)  Hardware Addr   Interface
 40.40.40.45             -  0050.7966.6808  Vlan40, Vxlan1
 40.40.40.46       0:16:18  0050.7966.6808  Vlan40, Vxlan1
 leaf02#
-
+#+end_src
 ** leaf03
+#+begin_src
 leaf03#sh vxlan vtep
 Remote VTEPS for Vxlan1:
 
@@ -423,3 +439,4 @@ Address         Age (sec)  Hardware Addr   Interface
 40.40.40.43       0:11:48  0050.7966.6808  Vlan40, Ethernet4
 40.40.40.45       0:19:00  0050.7966.6808  Vlan40, Ethernet4
 leaf03#
+#+end_src
