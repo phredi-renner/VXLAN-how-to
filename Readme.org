@@ -30,7 +30,7 @@ _*Leaf*_: A layer 3 switch that participates in the underlay and overlay network
 https://github.com/phredi-renner/VXLAN-how-to/blob/main/readme_content/diagram.png?raw=true
 
 * Configuration - Underlay
-The underlay provides basic connectivity and routing between the physical network devices and requires IP addressing and routing to provide this. As outlined in the diagram there are layer 3 point to point links between the leafs and spines. For our lab purposes we are foxusing on the leaf configureation, the spines are already configured.
+The underlay provides basic connectivity and routing between the physical network devices and requires IP addressing and routing to provide this. As outlined in the diagram there are layer 3 point to point links between the leafs and spines. For our lab purposes we are foxusing on the leaf configureation, the spines are already configured. Their configuration can be found at: https://github.com/phredi-renner/VXLAN-how-to/tree/main/arista-lab
 
 ** Configure Point-To-Point Link Addresses
 #+begin_src
