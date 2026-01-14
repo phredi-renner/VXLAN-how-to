@@ -105,6 +105,8 @@ interface Loopback0
 ** At this point you should be able to ping across each of the links to the directly connected neighbor
 
 * Configure Underlay Routing Process
+The underlay routing process enablesreachability between loopback addresses on each device. BGP, OSPF or ISIS would be the most commonly used. In our example here, we will use BGP.
+
 ** Basic BGP
 We will assign a BGP process for each pair, spines and leafs. these will be eBGP relationships with each leaf (or leaf pair) or spine (spine pair) having it's own AS number. The leafs will later use this for the overlay as well. The basic is similar on all nodes whether leaf or spine. This is what will advertise the loopback addresses and make them reachable from other devices.
 
